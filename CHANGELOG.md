@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-30
+
 ### Changed
 - README shows badges for the Release and Track ansible-role-kubernetes
   workflows, the latest release and the latest ansible-role-kubernetes release.
