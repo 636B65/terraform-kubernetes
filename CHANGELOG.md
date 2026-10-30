@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-30
+
+### Changed
+- CI uses `actions/checkout` v7, `actions/setup-python` v7 and
+  `hashicorp/setup-terraform` v4, which run on Node.js 24 instead of the
+  deprecated Node.js 20.
+- Dependabot keeps the GitHub Actions versions up to date.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added
