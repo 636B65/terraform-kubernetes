@@ -1,0 +1,117 @@
+name: Release
+
+# Every push to main validates the Terraform code. If the version in VERSION
+# has no tag yet, tag v<VERSION> and a GitHub release are created with the
+# matching CHANGELOG.md section as release notes. Only versions with a
+# pre-release suffix (e.g. 1.2.0-rc.1) are marked as pre-release.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate ${{ matrix.dir }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [proxmox, vcenter, esxi, workstation]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff
+
+      - name: terraform init
+        working-directory: ${{ matrix.dir }}
+        run: terraform init -backend=false -input=false
+
+      - name: terraform validate
+        working-directory: ${{ matrix.dir }}
+        run: terraform validate
+
+  release:
+    name: Tag and create release
+    needs: validate
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read and check version
+        id: version
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+          if ! [[ "$version" =~ $semver ]]; then
+            echo "::error file=VERSION::'$version' is not a valid semver version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          # Only semver pre-release versions (e.g. 1.2.0-rc.1) become pre-releases.
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag v$version already exists - no new release."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract release notes from CHANGELOG.md
+        if: steps.version.outputs.exists == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          awk -v v="$VERSION" '
+            /^## \[/ { if (found) exit; if (index($0, "## [" v "]") == 1) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "::error file=CHANGELOG.md::No [$VERSION] section in CHANGELOG.md"
+            exit 1
+          fi
+          cat release-notes.md
+
+      - name: Create tag and release
+        if: steps.version.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --notes-file release-notes.md \
+            --prerelease="$PRERELEASE"
+
+      - name: Fix pre-release status of existing release
+        if: steps.version.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          current="$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease 2>/dev/null || echo missing)"
+          if [[ "$current" != "missing" && "$current" != "$PRERELEASE" ]]; then
+            gh release edit "$TAG" --prerelease="$PRERELEASE"
+            echo "Set prerelease=$PRERELEASE on $TAG"
+          fi
