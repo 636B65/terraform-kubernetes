@@ -3,13 +3,14 @@
 # ---------------------------------------------------------------------------
 
 variable "vms" {
-  description = "VMs to create. Key = VM name/hostname. role is the Kubernetes role (control_plane or worker) used in the Ansible inventory. cpu, memory_mb and disk_gb can be set per VM, otherwise the defaults below are used."
+  description = "VMs to create. Key = VM name, hostname and Kubernetes node name. role is the Kubernetes role (control_plane or worker) used in the Ansible inventory. ansible_host optionally sets the address Ansible connects to (e.g. a DNS name); ip is then passed as kubernetes_node_ip. cpu, memory_mb and disk_gb can be set per VM, otherwise the defaults below are used."
   type = map(object({
-    ip        = string
-    role      = optional(string, "worker")
-    cpu       = optional(number)
-    memory_mb = optional(number)
-    disk_gb   = optional(number)
+    ip           = string
+    role         = optional(string, "worker")
+    ansible_host = optional(string)
+    cpu          = optional(number)
+    memory_mb    = optional(number)
+    disk_gb      = optional(number)
   }))
   default = {
     "kube-cp01" = { ip = "192.168.1.101", role = "control_plane" }
@@ -23,6 +24,16 @@ variable "vms" {
   validation {
     condition     = alltrue([for vm in values(var.vms) : can(cidrhost("${vm.ip}/32", 0))])
     error_message = "Every VM must have a valid IPv4 address in the ip field (without /prefix)."
+  }
+
+  validation {
+    condition     = alltrue([for name in keys(var.vms) : can(regex("^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$", name))])
+    error_message = "VM names are used as hostnames and Kubernetes node names: lowercase letters, digits and hyphens, starting and ending with a letter or digit."
+  }
+
+  validation {
+    condition     = length(distinct([for vm in values(var.vms) : vm.ip])) == length(var.vms)
+    error_message = "Every VM must have a unique IP address."
   }
 
   validation {
@@ -125,9 +136,9 @@ variable "ansible_role_source" {
 }
 
 variable "ansible_role_version" {
-  description = "Tag, branch or commit of ansible-role-kubernetes to use."
+  description = "Tag, branch or commit of ansible-role-kubernetes to use. Kept up to date by the track-ansible-role workflow."
   type        = string
-  default     = "v2.0.0"
+  default     = "v3.0.0"
 }
 
 variable "kubernetes_api_vip" {

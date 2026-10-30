@@ -37,7 +37,7 @@ Then log in with `ssh <vm_username>@<ip>`. `terraform output vms` lists all VMs.
 
 | Variable           | Description                                        | Default                 |
 |--------------------|----------------------------------------------------|-------------------------|
-| `vms`              | Map name → `{ ip, role?, cpu?, memory_mb?, disk_gb? }` | `kube-cp01..03`, `kube-wl01..03` |
+| `vms`              | Map name → `{ ip, role?, ansible_host?, cpu?, memory_mb?, disk_gb? }` | `kube-cp01..03`, `kube-wl01..03` |
 | `ip_prefix_length` | Netmask as prefix length                           | `24`                    |
 | `gateway`          | Default gateway                                    | *(required)*            |
 | `dns_servers`      | DNS servers                                        | `["1.1.1.1","8.8.8.8"]` |
@@ -157,6 +157,28 @@ the `k8s_control_plane` group and the rest into `k8s_workers`. The role
 variables (`kubernetes_api_vip`, `kubernetes_keepalived_auth_pass`,
 `loginusername`, ...) are included.
 
+Node names and addresses come from `vms` (role v3.0.0+ reads them from the
+inventory):
+
+- The key (e.g. `kube-cp01`) is the VM name, the hostname set by cloud-init and
+  the Kubernetes node name. It must be lowercase letters, digits and hyphens.
+- `ip` is the node's cluster address and becomes `ansible_host`.
+- If Ansible should connect another way (e.g. a DNS name or a management
+  address), set `ansible_host` on the VM. `ip` is then passed as
+  `kubernetes_node_ip`:
+
+  ```hcl
+  "kube-cp01" = { ip = "192.168.1.101", role = "control_plane", ansible_host = "kube-cp01.mgmt.lab.local" }
+  ```
+
+The workflow [`track-ansible-role.yml`](.github/workflows/track-ansible-role.yml)
+checks daily for new role releases and opens a pull request that updates
+`ansible_role_version`. For that, enable *Settings → Actions → General →
+Allow GitHub Actions to create and approve pull requests*; otherwise it opens an
+issue with the update branch instead. Pull requests created by GitHub Actions
+do not start CI themselves; the checks run when the change is merged to `main`
+(or push an empty change to the branch to run them earlier).
+
 Set `run_ansible = true` and Terraform installs the role (pinned with
 `ansible_role_version`) and runs [`ansible/site.yml`](ansible/site.yml) right
 after the VMs are created. The playbook first waits for SSH and cloud-init, then
@@ -176,7 +198,7 @@ ansible_extra_vars              = { kubernetes_observability_enabled = true }
 | `run_ansible`                     | Run the role after the VMs are created                   | `false`       |
 | `ansible_ssh_private_key_file`    | SSH key for Ansible; `null` = use `vm_password` (needs `sshpass`) | `null` |
 | `ansible_role_source`             | Git URL of the role                                      | GitHub repo   |
-| `ansible_role_version`            | Tag, branch or commit of the role                        | `v2.0.0`      |
+| `ansible_role_version`            | Tag, branch or commit of the role                        | `v3.0.0`      |
 | `kubernetes_api_vip`              | Kubernetes API virtual IP (required with `run_ansible`)  | `null`        |
 | `kubernetes_keepalived_auth_pass` | Keepalived password, max 8 characters (required with `run_ansible`) | `null` |
 | `ansible_extra_vars`              | Extra role variables                                     | `{}`          |

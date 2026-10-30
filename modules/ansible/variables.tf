@@ -1,8 +1,9 @@
 variable "vms" {
-  description = "VM name => { ip, role } where role is control_plane or worker."
+  description = "VM name => { ip, role, ansible_host } where role is control_plane or worker. When ansible_host is set, Ansible connects to it and ip becomes kubernetes_node_ip."
   type = map(object({
-    ip   = string
-    role = string
+    ip           = string
+    role         = string
+    ansible_host = optional(string)
   }))
 }
 

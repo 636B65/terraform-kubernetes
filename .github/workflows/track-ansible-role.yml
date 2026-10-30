@@ -1,0 +1,91 @@
+name: Track ansible-role-kubernetes
+
+# Checks daily for a new release of ansible-role-kubernetes. When one exists,
+# it updates ansible_role_version on a branch and opens a pull request (or an
+# issue, if the repository does not allow GitHub Actions to create pull
+# requests).
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  ROLE_REPO: 636B65/ansible-role-kubernetes
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare pinned and latest role version
+        id: check
+        run: |
+          current="$(sed -n '/variable "ansible_role_version"/,/^}/s/.*default *= *"\(.*\)"/\1/p' proxmox/variables.tf)"
+          latest="$(git ls-remote --tags --refs "https://github.com/$ROLE_REPO.git" 'v*' \
+            | sed 's|.*refs/tags/||' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V | tail -n1)"
+          echo "Pinned: $current, latest: $latest"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          newest="$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -n1)"
+          if [[ -n "$latest" && "$latest" != "$current" && "$newest" == "$latest" ]]; then
+            echo "update=true" >> "$GITHUB_OUTPUT"
+            [[ "${current%%.*}" != "${latest%%.*}" ]] && echo "major=true" >> "$GITHUB_OUTPUT" || echo "major=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "update=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update role version and open pull request
+        if: steps.check.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT: ${{ steps.check.outputs.current }}
+          LATEST: ${{ steps.check.outputs.latest }}
+          MAJOR: ${{ steps.check.outputs.major }}
+        run: |
+          branch="track/ansible-role-kubernetes-$LATEST"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "Branch $branch already exists - nothing to do."
+            exit 0
+          fi
+
+          sed -i '/variable "ansible_role_version"/,/^}/s/default *= *"[^"]*"/default     = "'"$LATEST"'"/' */variables.tf
+          sed -i 's/^\(ansible_role_version *= *\)"[^"]*"/\1"'"$LATEST"'"/' */terraform.tfvars.example
+          sed -i '/`ansible_role_version`/s/`v[0-9][0-9.]*`/`'"$LATEST"'`/' README.md
+          awk -v line="- ansible-role-kubernetes $CURRENT -> $LATEST ([release notes](https://github.com/$ROLE_REPO/releases/tag/$LATEST))." '
+            { print }
+            /^## \[Unreleased\]/ && !done { print ""; print "### Changed"; print line; done = 1 }
+          ' CHANGELOG.md > CHANGELOG.tmp && mv CHANGELOG.tmp CHANGELOG.md
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -am "Update ansible-role-kubernetes to $LATEST"
+          git push -u origin "$branch"
+
+          title="Update ansible-role-kubernetes to $LATEST"
+          [[ "$MAJOR" == "true" ]] && title="$title (major)"
+          cat > body.md <<BODY
+          ansible-role-kubernetes has a new release: **$CURRENT -> $LATEST**.
+
+          - Release notes: https://github.com/$ROLE_REPO/releases/tag/$LATEST
+          - Changes: https://github.com/$ROLE_REPO/compare/$CURRENT...$LATEST
+
+          $( [[ "$MAJOR" == "true" ]] && echo "> **Major version.** Read the role's upgrade notes before merging; existing clusters may be affected." )
+
+          To release this, bump \`VERSION\` and move the CHANGELOG entry into a new version section before merging.
+          BODY
+
+          if ! gh pr create --base main --head "$branch" --title "$title" --body-file body.md; then
+            echo "::warning::Could not open a pull request (enable 'Allow GitHub Actions to create and approve pull requests'). Opening an issue instead."
+            printf '\nBranch with the update: `%s`\n' "$branch" >> body.md
+            gh issue create --title "$title" --body-file body.md
+          fi

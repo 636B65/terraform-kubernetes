@@ -3,7 +3,7 @@
 module "ansible" {
   source = "../modules/ansible"
 
-  vms                  = { for name, vm in local.vms : name => { ip = vm.ip, role = vm.role } }
+  vms                  = { for name, vm in local.vms : name => { ip = vm.ip, role = vm.role, ansible_host = vm.ansible_host } }
   output_dir           = "${path.module}/.ansible"
   run                  = var.run_ansible
   username             = var.vm_username

@@ -4,7 +4,11 @@
 locals {
   hosts_in = {
     for role in ["control_plane", "worker"] : role => {
-      for name, vm in var.vms : name => { ansible_host = vm.ip } if vm.role == role
+      for name, vm in var.vms : name => (
+        vm.ansible_host == null
+        ? { ansible_host = vm.ip }
+        : { ansible_host = vm.ansible_host, kubernetes_node_ip = vm.ip }
+      ) if vm.role == role
     }
   }
 

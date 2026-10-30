@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-30
+
+### Added
+- `ansible_host` per VM in `vms`: Ansible connects to that address and the VM's
+  `ip` is passed to the role as `kubernetes_node_ip`.
+- Validation that VM names are valid hostnames/Kubernetes node names and that
+  every VM has a unique IP address.
+- `track-ansible-role` workflow that checks daily for new
+  ansible-role-kubernetes releases and opens a pull request that updates
+  `ansible_role_version`.
+
+### Changed
+- Default `ansible_role_version` is `v3.0.0`, which takes node names and
+  addresses from the inventory. With `run_ansible = true`, the next apply runs
+  the new role version; read its
+  [upgrade notes](https://github.com/636B65/ansible-role-kubernetes/releases/tag/v3.0.0)
+  first for existing clusters.
+
 ## [0.2.0] - 2026-10-30
 
 ### Added

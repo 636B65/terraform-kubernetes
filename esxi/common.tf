@@ -1,11 +1,12 @@
 locals {
   vms = {
     for name, vm in var.vms : name => {
-      ip        = vm.ip
-      role      = vm.role
-      cpu       = coalesce(vm.cpu, var.cpu)
-      memory_mb = coalesce(vm.memory_mb, var.memory_mb)
-      disk_gb   = coalesce(vm.disk_gb, var.disk_gb)
+      ip           = vm.ip
+      role         = vm.role
+      ansible_host = vm.ansible_host
+      cpu          = coalesce(vm.cpu, var.cpu)
+      memory_mb    = coalesce(vm.memory_mb, var.memory_mb)
+      disk_gb      = coalesce(vm.disk_gb, var.disk_gb)
     }
   }
 }
