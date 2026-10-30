@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-30
+
+### Added
+- Integration with [ansible-role-kubernetes](https://github.com/636B65/ansible-role-kubernetes):
+  every platform generates `.ansible/inventory.yml` with the `k8s_control_plane`
+  and `k8s_workers` groups and the role variables.
+- `run_ansible` option that installs the role (pinned with `ansible_role_version`,
+  default `v2.0.0`) and runs `ansible/site.yml` after the VMs are created.
+- New variables: `ansible_ssh_private_key_file`, `ansible_role_source`,
+  `ansible_role_version`, `kubernetes_api_vip`, `kubernetes_keepalived_auth_pass`,
+  `ansible_extra_vars` and `ansible_playbook_args`.
+- `role` (`control_plane` or `worker`) per VM in `vms`.
+
+### Changed
+- Default VMs are now `kube-cp01..03` (control plane) and `kube-wl01..03`
+  (workers). Existing deployments with the old default names are replaced;
+  set `vms` explicitly to keep them.
+- Default `disk_gb` is 60 and `extra_packages` defaults to `open-iscsi` and
+  `nfs-common`, as required by Longhorn in ansible-role-kubernetes.
+- The templates now also need the `hashicorp/local` provider.
+
 ## [0.1.0] - 2026-10-30
 
 ### Added

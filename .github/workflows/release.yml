@@ -39,9 +39,35 @@ jobs:
         working-directory: ${{ matrix.dir }}
         run: terraform validate
 
+  ansible:
+    name: Check Ansible playbook
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible
+        run: pip install ansible-core
+
+      - name: Install ansible-role-kubernetes
+        run: |
+          version="$(sed -n '/variable "ansible_role_version"/,/^}/s/.*default *= *"\(.*\)"/\1/p' proxmox/variables.tf)"
+          printf -- '- name: ansible-role-kubernetes\n  src: https://github.com/636B65/ansible-role-kubernetes.git\n  scm: git\n  version: %s\n' "$version" > requirements.yml
+          ansible-galaxy role install -r requirements.yml -p roles
+
+      - name: Syntax check
+        env:
+          ANSIBLE_ROLES_PATH: roles
+        run: |
+          printf 'all:\n  children:\n    k8s_control_plane:\n      hosts: { cp: { ansible_host: 192.0.2.1 } }\n    k8s_workers:\n      hosts: { wl: { ansible_host: 192.0.2.2 } }\n' > inventory.yml
+          ansible-playbook -i inventory.yml --syntax-check ansible/site.yml
+
   release:
     name: Tag and create release
-    needs: validate
+    needs: [validate, ansible]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

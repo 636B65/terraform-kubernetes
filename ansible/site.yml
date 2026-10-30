@@ -1,0 +1,24 @@
+---
+# Used by the Terraform templates (run_ansible = true) or manually with the
+# generated inventory, see README.
+
+- name: Wait for the VMs to finish cloud-init
+  hosts: k8s_control_plane:k8s_workers
+  gather_facts: false
+  tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+
+    - name: Wait for cloud-init to finish
+      ansible.builtin.command: cloud-init status --wait
+      changed_when: false
+      failed_when: false
+
+- name: Install Kubernetes cluster
+  hosts: k8s_control_plane:k8s_workers
+  become: true
+  any_errors_fatal: true
+  gather_facts: true
+  roles:
+    - ansible-role-kubernetes

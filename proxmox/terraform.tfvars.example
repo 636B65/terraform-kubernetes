@@ -16,13 +16,13 @@ vm_id_start        = 9101
 
 # --- Network ---------------------------------------------------------------
 vms = {
-  "ubuntu-01" = { ip = "192.168.1.101" }
-  "ubuntu-02" = { ip = "192.168.1.102" }
-  "ubuntu-03" = { ip = "192.168.1.103" }
-  "ubuntu-04" = { ip = "192.168.1.104" }
-  "ubuntu-05" = { ip = "192.168.1.105" }
+  "kube-cp01" = { ip = "192.168.1.101", role = "control_plane" }
+  "kube-cp02" = { ip = "192.168.1.102", role = "control_plane" }
+  "kube-cp03" = { ip = "192.168.1.103", role = "control_plane" }
+  "kube-wl01" = { ip = "192.168.1.111", role = "worker" }
+  "kube-wl02" = { ip = "192.168.1.112", role = "worker" }
   # Example of a per-VM override:
-  "ubuntu-06" = { ip = "192.168.1.106", cpu = 4, memory_mb = 8192, disk_gb = 80 }
+  "kube-wl03" = { ip = "192.168.1.113", role = "worker", cpu = 4, memory_mb = 8192, disk_gb = 100 }
 }
 ip_prefix_length = 24
 gateway          = "192.168.1.1"
@@ -37,4 +37,16 @@ ssh_public_keys = [] # e.g. ["ssh-ed25519 AAAA... user@host"]
 # --- Size (default for all VMs) ---------------------------------------
 cpu       = 2
 memory_mb = 4096
-disk_gb   = 40
+disk_gb   = 60
+
+# --- Ansible (ansible-role-kubernetes) ----------------------------------------
+# The inventory is always written to .ansible/inventory.yml. Set run_ansible =
+# true to install the role and run it right after the VMs are created.
+run_ansible                     = false
+# Key for Ansible (its public key must be in ssh_public_keys). Without it the
+# password is used, which requires sshpass.
+# ansible_ssh_private_key_file  = "~/.ssh/id_ed25519"
+ansible_role_version            = "v2.0.0"
+kubernetes_api_vip              = "192.168.1.100" # free IP, not used by any VM
+kubernetes_keepalived_auth_pass = "k8s-vip1" # at most 8 characters
+# ansible_extra_vars = { kubernetes_observability_enabled = true }

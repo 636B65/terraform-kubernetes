@@ -11,3 +11,13 @@ output "vms" {
     }
   }
 }
+
+output "ansible_inventory" {
+  description = "Generated Ansible inventory for ansible-role-kubernetes."
+  value       = module.ansible.inventory_file
+}
+
+output "ansible_command" {
+  description = "Command to run ansible-role-kubernetes manually."
+  value       = module.ansible.command
+}

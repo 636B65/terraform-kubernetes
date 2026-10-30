@@ -3,25 +3,31 @@
 # ---------------------------------------------------------------------------
 
 variable "vms" {
-  description = "VMs to create. Key = VM name/hostname. cpu, memory_mb and disk_gb can be set per VM, otherwise the defaults below are used."
+  description = "VMs to create. Key = VM name/hostname. role is the Kubernetes role (control_plane or worker) used in the Ansible inventory. cpu, memory_mb and disk_gb can be set per VM, otherwise the defaults below are used."
   type = map(object({
     ip        = string
+    role      = optional(string, "worker")
     cpu       = optional(number)
     memory_mb = optional(number)
     disk_gb   = optional(number)
   }))
   default = {
-    "ubuntu-01" = { ip = "192.168.1.101" }
-    "ubuntu-02" = { ip = "192.168.1.102" }
-    "ubuntu-03" = { ip = "192.168.1.103" }
-    "ubuntu-04" = { ip = "192.168.1.104" }
-    "ubuntu-05" = { ip = "192.168.1.105" }
-    "ubuntu-06" = { ip = "192.168.1.106" }
+    "kube-cp01" = { ip = "192.168.1.101", role = "control_plane" }
+    "kube-cp02" = { ip = "192.168.1.102", role = "control_plane" }
+    "kube-cp03" = { ip = "192.168.1.103", role = "control_plane" }
+    "kube-wl01" = { ip = "192.168.1.111", role = "worker" }
+    "kube-wl02" = { ip = "192.168.1.112", role = "worker" }
+    "kube-wl03" = { ip = "192.168.1.113", role = "worker" }
   }
 
   validation {
     condition     = alltrue([for vm in values(var.vms) : can(cidrhost("${vm.ip}/32", 0))])
     error_message = "Every VM must have a valid IPv4 address in the ip field (without /prefix)."
+  }
+
+  validation {
+    condition     = alltrue([for vm in values(var.vms) : contains(["control_plane", "worker"], vm.role)])
+    error_message = "role must be control_plane or worker."
   }
 }
 
@@ -79,9 +85,9 @@ variable "memory_mb" {
 }
 
 variable "disk_gb" {
-  description = "Disk size per VM in GB (default). Must be at least the size of the Ubuntu image disk (about 10 GB)."
+  description = "Disk size per VM in GB (default). Must be at least the size of the Ubuntu image disk (about 10 GB). ansible-role-kubernetes recommends 60 GB for Longhorn."
   type        = number
-  default     = 40
+  default     = 60
 }
 
 variable "timezone" {
@@ -91,7 +97,70 @@ variable "timezone" {
 }
 
 variable "extra_packages" {
-  description = "Extra apt packages installed on first boot."
+  description = "Extra apt packages installed on first boot. open-iscsi and nfs-common are required by Longhorn in ansible-role-kubernetes."
+  type        = list(string)
+  default     = ["open-iscsi", "nfs-common"]
+}
+
+# ---------------------------------------------------------------------------
+# Ansible (ansible-role-kubernetes)
+# ---------------------------------------------------------------------------
+
+variable "run_ansible" {
+  description = "Run ansible-role-kubernetes against the VMs after they are created. Requires ansible-playbook and git on the machine running Terraform (Linux, macOS or WSL). The inventory is generated either way."
+  type        = bool
+  default     = false
+}
+
+variable "ansible_ssh_private_key_file" {
+  description = "Private key Ansible uses for SSH (its public key must be in ssh_public_keys). null = use vm_password, which requires sshpass."
+  type        = string
+  default     = null
+}
+
+variable "ansible_role_source" {
+  description = "Git URL of ansible-role-kubernetes."
+  type        = string
+  default     = "https://github.com/636B65/ansible-role-kubernetes.git"
+}
+
+variable "ansible_role_version" {
+  description = "Tag, branch or commit of ansible-role-kubernetes to use."
+  type        = string
+  default     = "v2.0.0"
+}
+
+variable "kubernetes_api_vip" {
+  description = "Free IP address for the Kubernetes API virtual IP (Keepalived). Must be in the VM network and not used by any VM. Required when run_ansible = true."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.kubernetes_api_vip == null || can(cidrhost("${coalesce(var.kubernetes_api_vip, "0.0.0.0")}/32", 0))
+    error_message = "kubernetes_api_vip must be a valid IPv4 address."
+  }
+}
+
+variable "kubernetes_keepalived_auth_pass" {
+  description = "Keepalived password, at most 8 characters. Required when run_ansible = true."
+  type        = string
+  default     = null
+  sensitive   = true
+
+  validation {
+    condition     = var.kubernetes_keepalived_auth_pass == null || length(coalesce(var.kubernetes_keepalived_auth_pass, "x")) <= 8
+    error_message = "kubernetes_keepalived_auth_pass must be at most 8 characters."
+  }
+}
+
+variable "ansible_extra_vars" {
+  description = "Extra variables for ansible-role-kubernetes, written to the inventory (e.g. { kubernetes_observability_enabled = true })."
+  type        = any
+  default     = {}
+}
+
+variable "ansible_playbook_args" {
+  description = "Extra arguments for ansible-playbook, e.g. [\"--tags\", \"bootstrap\"]."
   type        = list(string)
   default     = []
 }

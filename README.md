@@ -17,6 +17,10 @@ All platforms use the official Ubuntu **cloud image** and **cloud-init**
 - **SSH enabled** with password login (plus optional public keys)
 - **CPU, memory and disk** – globally or per VM
 
+Optionally, Terraform also installs Kubernetes on the VMs with
+[ansible-role-kubernetes](https://github.com/636B65/ansible-role-kubernetes),
+see [Kubernetes with Ansible](#kubernetes-with-ansible).
+
 ## Quick start
 
 ```bash
@@ -33,7 +37,7 @@ Then log in with `ssh <vm_username>@<ip>`. `terraform output vms` lists all VMs.
 
 | Variable           | Description                                        | Default                 |
 |--------------------|----------------------------------------------------|-------------------------|
-| `vms`              | Map name → `{ ip, cpu?, memory_mb?, disk_gb? }`    | 6 VMs `ubuntu-01..06`   |
+| `vms`              | Map name → `{ ip, role?, cpu?, memory_mb?, disk_gb? }` | `kube-cp01..03`, `kube-wl01..03` |
 | `ip_prefix_length` | Netmask as prefix length                           | `24`                    |
 | `gateway`          | Default gateway                                    | *(required)*            |
 | `dns_servers`      | DNS servers                                        | `["1.1.1.1","8.8.8.8"]` |
@@ -43,17 +47,17 @@ Then log in with `ssh <vm_username>@<ip>`. `terraform output vms` lists all VMs.
 | `ssh_public_keys`  | Public SSH keys                                    | `[]`                    |
 | `cpu`              | vCPUs per VM                                       | `2`                     |
 | `memory_mb`        | Memory per VM (MB)                                 | `4096`                  |
-| `disk_gb`          | Disk per VM (GB, at least ~10)                     | `40`                    |
+| `disk_gb`          | Disk per VM (GB, at least ~10)                     | `60`                    |
 | `timezone`         | Time zone                                          | `Europe/Stockholm`      |
-| `extra_packages`   | Extra apt packages                                 | `[]`                    |
+| `extra_packages`   | Extra apt packages                                 | `["open-iscsi","nfs-common"]` |
 
 Example of overriding a single VM:
 
 ```hcl
 vms = {
-  "ubuntu-01" = { ip = "192.168.1.101" }
+  "kube-cp01" = { ip = "192.168.1.101", role = "control_plane" }
   # ...
-  "ubuntu-06" = { ip = "192.168.1.106", cpu = 4, memory_mb = 8192, disk_gb = 80 }
+  "kube-wl03" = { ip = "192.168.1.113", role = "worker", cpu = 4, memory_mb = 8192, disk_gb = 100 }
 }
 ```
 
@@ -144,10 +148,65 @@ Use forward slashes (`/`) in paths in `terraform.tfvars`, also on Windows.
 
 ---
 
+## Kubernetes with Ansible
+
+Every platform writes an Ansible inventory for
+[ansible-role-kubernetes](https://github.com/636B65/ansible-role-kubernetes) to
+`<platform>/.ansible/inventory.yml`. VMs with `role = "control_plane"` go into
+the `k8s_control_plane` group and the rest into `k8s_workers`. The role
+variables (`kubernetes_api_vip`, `kubernetes_keepalived_auth_pass`,
+`loginusername`, ...) are included.
+
+Set `run_ansible = true` and Terraform installs the role (pinned with
+`ansible_role_version`) and runs [`ansible/site.yml`](ansible/site.yml) right
+after the VMs are created. The playbook first waits for SSH and cloud-init, then
+runs the role. It runs again when the inventory, role version or playbook changes.
+
+```hcl
+run_ansible                     = true
+ssh_public_keys                 = ["ssh-ed25519 AAAA... user@host"]
+ansible_ssh_private_key_file    = "~/.ssh/id_ed25519"
+kubernetes_api_vip              = "192.168.1.100" # free IP, not used by any VM
+kubernetes_keepalived_auth_pass = "k8s-vip1"      # at most 8 characters
+ansible_extra_vars              = { kubernetes_observability_enabled = true }
+```
+
+| Variable                          | Description                                              | Default       |
+|-----------------------------------|----------------------------------------------------------|---------------|
+| `run_ansible`                     | Run the role after the VMs are created                   | `false`       |
+| `ansible_ssh_private_key_file`    | SSH key for Ansible; `null` = use `vm_password` (needs `sshpass`) | `null` |
+| `ansible_role_source`             | Git URL of the role                                      | GitHub repo   |
+| `ansible_role_version`            | Tag, branch or commit of the role                        | `v2.0.0`      |
+| `kubernetes_api_vip`              | Kubernetes API virtual IP (required with `run_ansible`)  | `null`        |
+| `kubernetes_keepalived_auth_pass` | Keepalived password, max 8 characters (required with `run_ansible`) | `null` |
+| `ansible_extra_vars`              | Extra role variables                                     | `{}`          |
+| `ansible_playbook_args`           | Extra `ansible-playbook` arguments, e.g. `["--tags", "bootstrap"]` | `[]` |
+
+Requirements: `ansible-playbook` (Ansible Core 2.16+) and `git` on the machine
+running Terraform. Ansible does not run natively on Windows; for VMware
+Workstation on Windows, run Terraform from WSL or leave `run_ansible = false`
+and run the playbook from another machine.
+
+To run the role manually instead (e.g. with `run_ansible = false`):
+
+```bash
+terraform output -raw ansible_command   # prints the full command
+cd .ansible
+ansible-galaxy role install --force -r requirements.yml -p roles
+ANSIBLE_ROLES_PATH=roles ansible-playbook -i inventory.yml ../../ansible/site.yml
+```
+
+> The inventory contains `vm_password` (when no SSH key is set) and the
+> Keepalived password. It is written with mode `0600` and ignored by git.
+
+---
+
 ## Layout
 
 ```
 modules/cloud-init/   shared cloud-init (user, password, SSH, network)
+modules/ansible/      Ansible inventory and optional run of ansible-role-kubernetes
+ansible/site.yml      playbook that runs ansible-role-kubernetes
 proxmox/              Proxmox VE
 vcenter/              vCenter
 esxi/                 standalone ESXi
@@ -155,7 +214,7 @@ workstation/          VMware Workstation (+ scripts/)
 ```
 
 Each platform directory has the same `variables.tf` (common variables at the
-top, platform-specific ones at the bottom), `common.tf`, `main.tf`, `outputs.tf`,
+top, platform-specific ones at the bottom), `common.tf`, `ansible.tf`, `main.tf`, `outputs.tf`,
 `versions.tf` and `terraform.tfvars.example`.
 
 ## Versioning and releases
