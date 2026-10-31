@@ -203,7 +203,7 @@ ansible_extra_vars              = { kubernetes_observability_enabled = true }
 | `run_ansible`                     | Run the role after the VMs are created                   | `false`       |
 | `ansible_ssh_private_key_file`    | SSH key for Ansible; `null` = use `vm_password` (needs `sshpass`) | `null` |
 | `ansible_role_source`             | Git URL of the role                                      | GitHub repo   |
-| `ansible_role_version`            | Tag, branch or commit of the role                        | `v3.0.0`      |
+| `ansible_role_version`            | Tag, branch or commit of the role                        | `v3.1.0`      |
 | `kubernetes_api_vip`              | Kubernetes API virtual IP (required with `run_ansible`)  | `null`        |
 | `kubernetes_keepalived_auth_pass` | Keepalived password, max 8 characters (required with `run_ansible`) | `null` |
 | `ansible_extra_vars`              | Extra role variables                                     | `{}`          |
