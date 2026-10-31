@@ -55,6 +55,19 @@ locals {
         ["systemctl", "enable", "--now", "ssh"],
         ["sh", "-c", "systemctl enable --now qemu-guest-agent 2>/dev/null || true"],
       ]
+
+      # On Proxmox the first boot can lose a race: cloud-init cannot rename the
+      # interface because it is already up on a DHCP lease ("Error renaming ...
+      # [busy]"), so the VM keeps a DHCP address and the static one only
+      # applies after a reboot. Reboot once, after the packages are installed,
+      # when the static address is missing. cloud-init runs power_state once
+      # per instance, so this cannot loop.
+      power_state = {
+        mode      = "reboot"
+        message   = "Rebooting to apply the static network configuration"
+        timeout   = 30
+        condition = "! ip -4 -o addr show | grep -q ' ${ip}/'"
+      }
     })])
   }
 

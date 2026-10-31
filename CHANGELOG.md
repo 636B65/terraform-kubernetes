@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-31
+
+### Changed
+- Default `ansible_role_version` is `v3.1.0`, which can turn off Longhorn and
+  the internal registry on small hosts and fixes the bootstrap order.
+
+### Fixed
+- Proxmox VMs reboot once on first boot when cloud-init lost the interface
+  rename race and the static address is missing.
+- `.gitignore` covers saved plan files (`tfplan*`), which contain secrets.
+
 ## [0.3.2] - 2026-10-30
 
 ### Changed
