@@ -13,6 +13,7 @@ Terraform templates that create **6 virtual machines running Ubuntu 26.04** on:
 | `vcenter/`     | VMware vCenter (vSphere)        | `vmware/vsphere`                           |
 | `esxi/`        | Standalone VMware ESXi          | `josenk/esxi` (requires `ovftool`)         |
 | `workstation/` | VMware Workstation (Win/Linux)  | `vmrun` + `vmware-vdiskmanager` via script |
+| `libvirt/`     | KVM/QEMU via libvirt            | `dmacvicar/libvirt`                        |
 
 All platforms use the official Ubuntu **cloud image** and **cloud-init**
 (`modules/cloud-init`) to configure:
@@ -29,7 +30,7 @@ see [Kubernetes with Ansible](#kubernetes-with-ansible).
 ## Quick start
 
 ```bash
-cd proxmox            # or vcenter / esxi / workstation
+cd proxmox            # or vcenter / esxi / workstation / libvirt
 cp terraform.tfvars.example terraform.tfvars
 # edit terraform.tfvars
 terraform init
@@ -151,6 +152,29 @@ has already run in it.
 
 Use forward slashes (`/`) in paths in `terraform.tfvars`, also on Windows.
 
+## libvirt (KVM/QEMU)
+
+Requirements:
+
+- A Linux host with KVM, QEMU and libvirt (`libvirtd` or the modular
+  `virtqemud`), and a user in the `libvirt` group – or a remote host reached
+  with `libvirt_uri = "qemu+ssh://user@kvm01/system"`.
+- A storage pool (`storage_pool`, default `default`):
+  `virsh pool-define-as default dir --target /var/lib/libvirt/images && virsh pool-autostart default && virsh pool-start default`.
+- A network: either a libvirt network (`network_name`, default `default`, NAT on
+  `192.168.122.0/24` with gateway `.1`) or a host bridge such as `br0`
+  (`network_bridge`) to put the VMs directly on the LAN.
+
+Terraform downloads the Ubuntu 26.04 cloud image into the pool once, gives
+every VM a copy-on-write disk on top of it, and attaches a cloud-init NoCloud
+ISO with the user, password, SSH settings and static IP. The guest CPU defaults
+to `host-passthrough`; a VNC console listens on `127.0.0.1` on the host
+(`virsh domdisplay <vm>`).
+
+The default libvirt network hands out DHCP leases from `.2` to `.254`. Shrink
+that range (`virsh net-edit default`) or use a bridge, so DHCP does not hand out
+the static IPs in `vms`.
+
 ---
 
 ## Kubernetes with Ansible
@@ -238,6 +262,7 @@ proxmox/              Proxmox VE
 vcenter/              vCenter
 esxi/                 standalone ESXi
 workstation/          VMware Workstation (+ scripts/)
+libvirt/              KVM/QEMU via libvirt
 ```
 
 Each platform directory has the same `variables.tf` (common variables at the

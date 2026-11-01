@@ -1,0 +1,50 @@
+# Copy to terraform.tfvars and fill in.
+
+# --- libvirt -----------------------------------------------------------------
+libvirt_uri  = "qemu:///system" # or "qemu+ssh://user@kvm01/system"
+storage_pool = "default"
+
+# Either a libvirt network (default: NAT 192.168.122.0/24)...
+network_name = "default"
+# ...or a host bridge so the VMs are directly on the LAN:
+# network_bridge = "br0"
+
+# The default network hands out DHCP leases from .2 to .254. Shrink that range
+# (virsh net-edit default) so it does not overlap the static IPs below.
+
+# --- Network ---------------------------------------------------------------
+vms = {
+  "kube-cp01" = { ip = "192.168.122.101", role = "control_plane" }
+  "kube-cp02" = { ip = "192.168.122.102", role = "control_plane" }
+  "kube-cp03" = { ip = "192.168.122.103", role = "control_plane" }
+  "kube-wl01" = { ip = "192.168.122.111", role = "worker" }
+  "kube-wl02" = { ip = "192.168.122.112", role = "worker" }
+  # Example of a per-VM override:
+  "kube-wl03" = { ip = "192.168.122.113", role = "worker", cpu = 4, memory_mb = 8192, disk_gb = 100 }
+}
+ip_prefix_length = 24
+gateway          = "192.168.122.1" # the default libvirt network uses .1
+dns_servers      = ["192.168.122.1", "1.1.1.1"]
+dns_domain       = "lab.local"
+
+# --- Login (SSH is always enabled with password) ----------------------
+vm_username     = "ubuntu"
+vm_password     = "ChangeMe123!"
+ssh_public_keys = [] # e.g. ["ssh-ed25519 AAAA... user@host"]
+
+# --- Size (default for all VMs) ---------------------------------------
+cpu       = 2
+memory_mb = 4096
+disk_gb   = 60
+
+# --- Ansible (ansible-role-kubernetes) ----------------------------------------
+# The inventory is always written to .ansible/inventory.yml. Set run_ansible =
+# true to install the role and run it right after the VMs are created.
+run_ansible                     = false
+# Key for Ansible (its public key must be in ssh_public_keys). Without it the
+# password is used, which requires sshpass.
+# ansible_ssh_private_key_file  = "~/.ssh/id_ed25519"
+ansible_role_version            = "v3.1.0"
+kubernetes_api_vip              = "192.168.122.100" # free IP, not used by any VM
+kubernetes_keepalived_auth_pass = "k8s-vip1" # at most 8 characters
+# ansible_extra_vars = { kubernetes_observability_enabled = true }

@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-01
+
+### Added
+- `libvirt/`: the 6 Ubuntu 26.04 VMs on KVM/QEMU with the `dmacvicar/libvirt`
+  provider (0.9.x). The cloud image is downloaded into a storage pool once and
+  each VM gets a copy-on-write disk and a cloud-init NoCloud ISO with the
+  user, password, SSH and static IP. VMs attach to a libvirt network or a host
+  bridge. Inventory generation and `run_ansible` work as on the other platforms.
+
 ## [0.3.3] - 2026-10-31
 
 ### Changed
