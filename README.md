@@ -14,6 +14,7 @@ Terraform templates that create **6 virtual machines running Ubuntu 26.04** on:
 | `esxi/`        | Standalone VMware ESXi          | `josenk/esxi` (requires `ovftool`)         |
 | `workstation/` | VMware Workstation (Win/Linux)  | `vmrun` + `vmware-vdiskmanager` via script |
 | `libvirt/`     | KVM/QEMU via libvirt            | `dmacvicar/libvirt`                        |
+| `virtualbox/`  | VirtualBox (Win/macOS/Linux)    | `VBoxManage` via script                    |
 
 All platforms use the official Ubuntu **cloud image** and **cloud-init**
 (`modules/cloud-init`) to configure:
@@ -30,7 +31,7 @@ see [Kubernetes with Ansible](#kubernetes-with-ansible).
 ## Quick start
 
 ```bash
-cd proxmox            # or vcenter / esxi / workstation / libvirt
+cd proxmox            # or vcenter / esxi / workstation / libvirt / virtualbox
 cp terraform.tfvars.example terraform.tfvars
 # edit terraform.tfvars
 terraform init
@@ -175,6 +176,44 @@ The default libvirt network hands out DHCP leases from `.2` to `.254`. Shrink
 that range (`virsh net-edit default`) or use a bridge, so DHCP does not hand out
 the static IPs in `vms`.
 
+## VirtualBox
+
+There is no well-maintained Terraform provider for VirtualBox, so Terraform runs
+`scripts/vm.sh` (Linux/macOS) or `scripts/vm.ps1` (Windows). For each VM the
+script:
+
+1. builds a cloud-init NoCloud seed ISO (volume label `cidata`) with the user,
+   password, SSH settings and static IP,
+2. imports the Ubuntu 26.04 cloud image OVA with `VBoxManage import`, with the
+   VM's CPU and memory,
+3. converts the disk to VDI if needed and expands it to `disk_gb`,
+4. sets the network adapter (virtio), a serial port (Ubuntu cloud images boot
+   slowly without one; the console is logged to `console.log` in the VM
+   folder) and attaches the seed ISO,
+5. starts the VM (headless unless `start_gui = true`).
+
+`terraform destroy` powers the VMs off and deletes them with their disks. The
+OVA is downloaded once into `vm_directory` (or set `ubuntu_ova` to a local
+file); the VMs are created in VirtualBox's default machine folder.
+
+Requirements:
+
+- VirtualBox 7.x (6.1 should work) with `VBoxManage` in `PATH`, or set
+  `vboxmanage_path`. On Windows the default install path is used.
+- To build the seed ISO: `xorriso` or `genisoimage` on Linux
+  (`apt install xorriso`); macOS uses the built-in `hdiutil` and Windows the
+  built-in IMAPI2 API.
+- `curl` on Linux/macOS to download the OVA.
+
+Networking (`network_type` and `network_name`):
+
+| `network_type` | `network_name`                          | Notes |
+|----------------|-----------------------------------------|-------|
+| `bridged`      | Host adapter, see `VBoxManage list bridgedifs` | **Recommended.** VMs are on the LAN with internet access; use LAN IPs and gateway. |
+| `natnetwork`   | NAT network, see `VBoxManage list natnets` | Internet access and VM-to-VM traffic, but the host cannot reach the VMs without port forwarding, so Ansible cannot run from the host. Gateway is the NAT network's `.1`. |
+| `hostonly`     | Host-only adapter, e.g. `vboxnet0`      | Host and VMs can talk, but there is no internet access, which the Kubernetes install needs. |
+| `hostonlynet`  | Host-only network (VirtualBox 7, macOS) | As `hostonly`. |
+
 ---
 
 ## Kubernetes with Ansible
@@ -263,6 +302,7 @@ vcenter/              vCenter
 esxi/                 standalone ESXi
 workstation/          VMware Workstation (+ scripts/)
 libvirt/              KVM/QEMU via libvirt
+virtualbox/           VirtualBox (+ scripts/)
 ```
 
 Each platform directory has the same `variables.tf` (common variables at the

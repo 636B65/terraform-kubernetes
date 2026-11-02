@@ -1,0 +1,51 @@
+# Copy to terraform.tfvars and fill in.
+# Use forward slashes (/) in paths, also on Windows.
+
+# --- VirtualBox ---------------------------------------------------------------
+vm_directory = "C:/VMs/virtualbox" # OVA download and cloud-init seed ISOs
+# ubuntu_ova = "C:/Downloads/ubuntu-26.04-server-cloudimg-amd64.ova" # skip the download
+# vboxmanage_path = "C:/Program Files/Oracle/VirtualBox/VBoxManage.exe"
+
+# bridged puts the VMs on your LAN (they need internet access for Kubernetes).
+# network_name is the host adapter: "eth0"/"en0", or on Windows its full name
+# as listed by: VBoxManage list bridgedifs
+network_type = "bridged"
+network_name = "Intel(R) Ethernet Connection (7) I219-V"
+start_gui    = false
+
+# --- Network ---------------------------------------------------------------
+vms = {
+  "kube-cp01" = { ip = "192.168.1.101", role = "control_plane" }
+  "kube-cp02" = { ip = "192.168.1.102", role = "control_plane" }
+  "kube-cp03" = { ip = "192.168.1.103", role = "control_plane" }
+  "kube-wl01" = { ip = "192.168.1.111", role = "worker" }
+  "kube-wl02" = { ip = "192.168.1.112", role = "worker" }
+  # Example of a per-VM override:
+  "kube-wl03" = { ip = "192.168.1.113", role = "worker", cpu = 4, memory_mb = 8192, disk_gb = 100 }
+}
+ip_prefix_length = 24
+gateway          = "192.168.1.1"
+dns_servers      = ["192.168.1.1", "1.1.1.1"]
+dns_domain       = "lab.local"
+
+# --- Login (SSH is always enabled with password) ----------------------
+vm_username     = "ubuntu"
+vm_password     = "ChangeMe123!"
+ssh_public_keys = [] # e.g. ["ssh-ed25519 AAAA... user@host"]
+
+# --- Size (default for all VMs) ---------------------------------------
+cpu       = 2
+memory_mb = 4096
+disk_gb   = 60
+
+# --- Ansible (ansible-role-kubernetes) ----------------------------------------
+# The inventory is always written to .ansible/inventory.yml. Set run_ansible =
+# true to install the role and run it right after the VMs are created.
+run_ansible                     = false
+# Key for Ansible (its public key must be in ssh_public_keys). Without it the
+# password is used, which requires sshpass.
+# ansible_ssh_private_key_file  = "~/.ssh/id_ed25519"
+ansible_role_version            = "v3.1.0"
+kubernetes_api_vip              = "192.168.1.100" # free IP, not used by any VM
+kubernetes_keepalived_auth_pass = "k8s-vip1" # at most 8 characters
+# ansible_extra_vars = { kubernetes_observability_enabled = true }

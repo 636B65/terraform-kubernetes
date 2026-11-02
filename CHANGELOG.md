@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-02
+
+### Added
+- `virtualbox/`: the 6 Ubuntu 26.04 VMs on VirtualBox (Windows, macOS and
+  Linux hosts). Terraform runs `VBoxManage` through `scripts/vm.sh` or
+  `scripts/vm.ps1`: it imports the Ubuntu cloud image OVA (downloaded once),
+  sets CPU, memory and disk size, attaches a cloud-init NoCloud seed ISO with
+  the user, password, SSH and static IP, and starts the VMs. Bridged, NAT
+  network and host-only networking are supported. Inventory generation and
+  `run_ansible` work as on the other platforms.
+
 ## [0.4.0] - 2026-11-01
 
 ### Added

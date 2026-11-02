@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dir: [proxmox, vcenter, esxi, workstation, libvirt]
+        dir: [proxmox, vcenter, esxi, workstation, libvirt, virtualbox]
     steps:
       - uses: actions/checkout@v7
 
