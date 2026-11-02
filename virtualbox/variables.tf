@@ -176,6 +176,45 @@ variable "ansible_playbook_args" {
   default     = []
 }
 
+# ---------------------------------------------------------------------------
+# Offline / air-gapped deployment
+# ---------------------------------------------------------------------------
+
+variable "offline" {
+  description = "The VMs have no internet access. cloud-init skips package installs and disables the Ubuntu archive sources (unless apt_mirror is set), and ansible-role-kubernetes installs from offline_bundle with kubernetes_offline_mode."
+  type        = bool
+  default     = false
+}
+
+variable "apt_mirror" {
+  description = "Internal Ubuntu archive mirror, e.g. http://mirror.lab.local/ubuntu. null = default sources (none when offline = true)."
+  type        = string
+  default     = null
+}
+
+variable "apt_security_mirror" {
+  description = "Internal Ubuntu security mirror. null = apt_mirror."
+  type        = string
+  default     = null
+}
+
+variable "ntp_servers" {
+  description = "NTP servers for the VMs, e.g. internal ones on an offline network. Empty = image default."
+  type        = list(string)
+  default     = []
+}
+
+variable "offline_bundle" {
+  description = "Path of the offline bundle archive (a .tar of /opt/kubernetes-offline) on the machine running Terraform: written by stage_offline_bundle, read by offline = true."
+  type        = string
+  default     = null
+}
+
+variable "stage_offline_bundle" {
+  description = "After installing the (online) cluster, stage an offline bundle with ansible-role-kubernetes (--tags offline_stage) and fetch it from the first controller to offline_bundle. Requires run_ansible = true."
+  type        = bool
+  default     = false
+}
 
 # ---------------------------------------------------------------------------
 # VirtualBox

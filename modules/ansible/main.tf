@@ -30,6 +30,8 @@ locals {
       kubernetes_api_vip              = var.api_vip
       kubernetes_api_vip_prefix       = var.api_vip_prefix
       kubernetes_keepalived_auth_pass = var.keepalived_auth_pass
+      kubernetes_offline_mode         = var.offline ? true : null
+      offline_bundle                  = var.offline && var.offline_bundle != null ? abspath(pathexpand(var.offline_bundle)) : null
     } : k => v if v != null },
     var.extra_vars,
   )
@@ -53,8 +55,15 @@ locals {
     }]
   })
 
-  playbook = abspath("${path.module}/../../ansible/site.yml")
-  out      = abspath(var.output_dir)
+  playbook       = abspath("${path.module}/../../ansible/site.yml")
+  fetch_playbook = abspath("${path.module}/../../ansible/fetch-offline-bundle.yml")
+  out            = abspath(var.output_dir)
+
+  ansible_env = {
+    ANSIBLE_ROLES_PATH        = "${local.out}/roles"
+    ANSIBLE_HOST_KEY_CHECKING = "False"
+    ANSIBLE_FORCE_COLOR       = "1"
+  }
 }
 
 resource "local_sensitive_file" "inventory" {
@@ -87,11 +96,7 @@ resource "terraform_data" "playbook" {
       ansible-playbook -i inventory.yml ${join(" ", [for a in var.playbook_args : format("%q", a)])} '${local.playbook}'
     EOT
 
-    environment = {
-      ANSIBLE_ROLES_PATH        = "${local.out}/roles"
-      ANSIBLE_HOST_KEY_CHECKING = "False"
-      ANSIBLE_FORCE_COLOR       = "1"
-    }
+    environment = local.ansible_env
   }
 
   lifecycle {
@@ -99,9 +104,46 @@ resource "terraform_data" "playbook" {
       condition     = var.api_vip != null && var.keepalived_auth_pass != null
       error_message = "run_ansible = true requires kubernetes_api_vip and kubernetes_keepalived_auth_pass."
     }
+
+    precondition {
+      condition     = !var.offline || var.offline_bundle != null
+      error_message = "offline = true with run_ansible = true requires offline_bundle (the staged bundle archive)."
+    }
   }
 
   depends_on = [local_sensitive_file.inventory, local_file.requirements]
+}
+
+# Stages an offline bundle on the (online) cluster and fetches it from the
+# first controller to offline_bundle, for an offline install elsewhere.
+resource "terraform_data" "stage_bundle" {
+  count = var.stage_bundle ? 1 : 0
+
+  triggers_replace = [
+    sha256(local.inventory),
+    sha256(local.requirements),
+    var.offline_bundle,
+  ]
+
+  provisioner "local-exec" {
+    working_dir = local.out
+    command     = <<-EOT
+      set -e
+      ansible-playbook -i inventory.yml --tags offline_stage '${local.playbook}'
+      ansible-playbook -i inventory.yml -e offline_bundle='${abspath(pathexpand(coalesce(var.offline_bundle, "-")))}' '${local.fetch_playbook}'
+    EOT
+
+    environment = local.ansible_env
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.run && !var.offline && var.offline_bundle != null
+      error_message = "stage_offline_bundle = true requires run_ansible = true, offline = false and offline_bundle (where to save the bundle)."
+    }
+  }
+
+  depends_on = [terraform_data.playbook]
 }
 
 check "api_vip" {

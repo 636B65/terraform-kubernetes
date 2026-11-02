@@ -59,3 +59,18 @@ variable "extra_vars" {
 variable "playbook_args" {
   type = list(string)
 }
+
+variable "offline" {
+  description = "Install with kubernetes_offline_mode from the bundle in offline_bundle."
+  type        = bool
+}
+
+variable "offline_bundle" {
+  description = "Path of the offline bundle archive on the machine running Terraform."
+  type        = string
+}
+
+variable "stage_bundle" {
+  description = "Stage an offline bundle on the cluster and fetch it to offline_bundle."
+  type        = bool
+}

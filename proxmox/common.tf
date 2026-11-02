@@ -14,14 +14,18 @@ locals {
 module "cloud_init" {
   source = "../modules/cloud-init"
 
-  vms              = { for name, vm in local.vms : name => vm.ip }
-  ip_prefix_length = var.ip_prefix_length
-  gateway          = var.gateway
-  dns_servers      = var.dns_servers
-  dns_domain       = var.dns_domain
-  username         = var.vm_username
-  password         = var.vm_password
-  ssh_public_keys  = var.ssh_public_keys
-  timezone         = var.timezone
-  extra_packages   = concat(["qemu-guest-agent"], var.extra_packages)
+  vms                 = { for name, vm in local.vms : name => vm.ip }
+  ip_prefix_length    = var.ip_prefix_length
+  gateway             = var.gateway
+  dns_servers         = var.dns_servers
+  dns_domain          = var.dns_domain
+  username            = var.vm_username
+  password            = var.vm_password
+  ssh_public_keys     = var.ssh_public_keys
+  timezone            = var.timezone
+  extra_packages      = concat(["qemu-guest-agent"], var.extra_packages)
+  offline             = var.offline
+  apt_mirror          = var.apt_mirror
+  apt_security_mirror = var.apt_security_mirror
+  ntp_servers         = var.ntp_servers
 }

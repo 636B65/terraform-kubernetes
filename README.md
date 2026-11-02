@@ -291,12 +291,94 @@ ANSIBLE_ROLES_PATH=roles ansible-playbook -i inventory.yml ../../ansible/site.ym
 
 ---
 
+## Offline (air-gapped) deployment
+
+ansible-role-kubernetes can install a cluster without internet access from a
+bundle of packages and container images staged on a cluster that has it (see
+its [offline guide](https://github.com/636B65/ansible-role-kubernetes/blob/main/docs/offline.md)).
+These templates cover both halves: staging the bundle on an online cluster and
+installing from it on an offline one.
+
+> The offline flow has not been verified end to end on an air-gapped network
+> yet, in these templates or in the role. Test it in a lab first.
+
+### 1. Stage a bundle (online)
+
+Deploy a cluster that has internet access, with the **same Ubuntu release,
+CPU architecture and role version** as the offline cluster, and let Terraform
+stage and fetch the bundle:
+
+```hcl
+run_ansible          = true
+stage_offline_bundle = true
+offline_bundle       = "~/kubernetes-offline.tar" # written here
+```
+
+After the normal install, Terraform runs the role with `--tags offline_stage`
+(every node saves its packages and images to `/opt/kubernetes-offline`), then
+[`ansible/fetch-offline-bundle.yml`](ansible/fetch-offline-bundle.yml) packs
+the bundle on the first controller (which also has the Cilium assets) and
+fetches it to `offline_bundle`. Expect several GB. The staging cluster can be
+destroyed afterwards.
+
+### 2. Prepare the offline side
+
+Everything Terraform and Ansible would download must be available locally:
+
+| What | How |
+|------|-----|
+| Terraform providers | On a connected machine: `terraform providers mirror /path/to/mirror` in each platform directory you use. Offline, point the CLI at it in `~/.terraformrc`: `provider_installation { filesystem_mirror { path = "/path/to/mirror" } }`. |
+| Ansible | `pip download ansible-core` on a connected machine, `pip install --no-index --find-links ...` offline. |
+| The role | Clone ansible-role-kubernetes to the Terraform machine and set `ansible_role_source = "/path/to/ansible-role-kubernetes"` (a local git repository; `ansible_role_version` must be a tag or branch in it). |
+| Ubuntu image | Copy the cloud image or OVA. libvirt (`ubuntu_image_url`), VirtualBox and ESXi (`ubuntu_ova`) take a local path. Proxmox: upload the `.img` to the node and set `ubuntu_image_file_id` (e.g. `local:iso/ubuntu-26.04-server-cloudimg-amd64.img`), or point `ubuntu_image_url` at an internal web server. vCenter and Workstation use the template you import. |
+| DNS and time | Set `dns_servers` and `ntp_servers` to internal servers. The role needs synchronized clocks. |
+
+### 3. Install offline
+
+```hcl
+offline        = true
+offline_bundle = "~/kubernetes-offline.tar" # from step 1
+run_ansible    = true
+ntp_servers    = ["10.0.0.5"]
+dns_servers    = ["10.0.0.53"]
+# apt_mirror   = "http://mirror.lab.local/ubuntu" # if you have an internal mirror
+```
+
+With `offline = true`:
+
+- cloud-init installs no packages and disables the Ubuntu archive sources
+  (`ubuntu.sources` is renamed to `ubuntu.sources.disabled`), so `apt-get
+  update` only uses the bundle's local repository. With `apt_mirror` set, the
+  sources point at the mirror instead and packages are installed from it.
+- [`ansible/site.yml`](ansible/site.yml) unpacks `offline_bundle` into
+  `/opt/kubernetes-offline` on every node (skipped when it is already there),
+  then runs the role with `kubernetes_offline_mode: true`, which installs
+  packages from the bundle and imports the images into containerd.
+
+`apt_mirror` and `ntp_servers` can also be used without `offline`, for
+example on a network that only reaches an internal mirror.
+
+| Variable              | Description                                                        | Default |
+|-----------------------|--------------------------------------------------------------------|---------|
+| `offline`             | Install without internet access from `offline_bundle`              | `false` |
+| `offline_bundle`      | Bundle archive on the Terraform machine (written by staging, read offline) | `null` |
+| `stage_offline_bundle`| Stage a bundle after the online install and fetch it to `offline_bundle` | `false` |
+| `apt_mirror`          | Internal Ubuntu archive mirror                                     | `null`  |
+| `apt_security_mirror` | Internal Ubuntu security mirror (`null` = `apt_mirror`)            | `null`  |
+| `ntp_servers`         | NTP servers                                                        | `[]`    |
+
+kube-prometheus-stack is installed from its upstream Helm repository and is
+not available offline (role limitation).
+
+---
+
 ## Layout
 
 ```
 modules/cloud-init/   shared cloud-init (user, password, SSH, network)
-modules/ansible/      Ansible inventory and optional run of ansible-role-kubernetes
-ansible/site.yml      playbook that runs ansible-role-kubernetes
+modules/ansible/      Ansible inventory, optional run of ansible-role-kubernetes and offline bundle staging
+ansible/site.yml      playbook that unpacks an offline bundle and runs ansible-role-kubernetes
+ansible/fetch-offline-bundle.yml  packs and fetches a staged offline bundle
 proxmox/              Proxmox VE
 vcenter/              vCenter
 esxi/                 standalone ESXi

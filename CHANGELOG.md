@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-02
+
+### Added
+- Offline (air-gapped) deployment on all platforms, using the offline mode of
+  ansible-role-kubernetes:
+  - `stage_offline_bundle` stages a bundle on an online cluster
+    (`--tags offline_stage`) and fetches it from the first controller to
+    `offline_bundle` with the new `ansible/fetch-offline-bundle.yml`.
+  - `offline = true` installs from that bundle: cloud-init skips package
+    installs and disables the Ubuntu archive sources, `ansible/site.yml`
+    unpacks the bundle to `/opt/kubernetes-offline` on every node, and the
+    role runs with `kubernetes_offline_mode`.
+- `apt_mirror` and `apt_security_mirror` point the VMs at an internal Ubuntu
+  mirror, and `ntp_servers` sets the time servers.
+- Proxmox: `ubuntu_image_file_id` uses a cloud image already on the node
+  instead of downloading `ubuntu_image_url`.
+- README guide for offline deployment: provider mirror, local role copy,
+  images, staging and installing.
+- CI also syntax-checks `ansible/fetch-offline-bundle.yml`.
+
 ## [0.5.0] - 2026-11-02
 
 ### Added

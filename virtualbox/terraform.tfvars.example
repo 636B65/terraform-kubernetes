@@ -49,3 +49,13 @@ ansible_role_version            = "v3.1.0"
 kubernetes_api_vip              = "192.168.1.100" # free IP, not used by any VM
 kubernetes_keepalived_auth_pass = "k8s-vip1" # at most 8 characters
 # ansible_extra_vars = { kubernetes_observability_enabled = true }
+
+# --- Offline / air-gapped (see README "Offline (air-gapped) deployment") -------
+# Stage a bundle on an online cluster (needs run_ansible = true):
+# stage_offline_bundle = true
+# offline_bundle       = "~/kubernetes-offline.tar"
+# ...or install from it on an offline network:
+# offline        = true
+# offline_bundle = "~/kubernetes-offline.tar"
+# ntp_servers    = ["10.0.0.5"]
+# apt_mirror     = "http://mirror.lab.local/ubuntu" # optional internal mirror

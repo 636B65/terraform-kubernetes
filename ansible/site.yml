@@ -15,6 +15,30 @@
       changed_when: false
       failed_when: false
 
+- name: Install the offline bundle
+  hosts: k8s_control_plane:k8s_workers
+  become: true
+  gather_facts: false
+  vars:
+    offline_dir: "{{ kubernetes_offline_assets_directory | default('/opt/kubernetes-offline') }}"
+  tasks:
+    - name: Unpack the staged bundle on every node
+      when:
+        - kubernetes_offline_mode | default(false) | bool
+        - offline_bundle | default('') | length > 0
+      block:
+        - name: Create the bundle directory
+          ansible.builtin.file:
+            path: "{{ offline_dir }}"
+            state: directory
+            mode: "0755"
+
+        - name: Unpack the bundle (skipped when it is already there)
+          ansible.builtin.unarchive:
+            src: "{{ offline_bundle }}"
+            dest: "{{ offline_dir }}"
+            creates: "{{ offline_dir }}/VERSIONS"
+
 - name: Install Kubernetes cluster
   hosts: k8s_control_plane:k8s_workers
   become: true

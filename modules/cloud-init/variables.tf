@@ -45,3 +45,27 @@ variable "interface_match" {
   type        = string
   default     = "en*"
 }
+
+variable "offline" {
+  description = "Nodes have no internet access: skip package installs and disable the Ubuntu archive sources unless apt_mirror is set."
+  type        = bool
+  default     = false
+}
+
+variable "apt_mirror" {
+  description = "Ubuntu archive mirror URL, or null for the default sources."
+  type        = string
+  default     = null
+}
+
+variable "apt_security_mirror" {
+  description = "Ubuntu security mirror URL. null = apt_mirror."
+  type        = string
+  default     = null
+}
+
+variable "ntp_servers" {
+  description = "NTP servers, or empty for the image default."
+  type        = list(string)
+  default     = []
+}

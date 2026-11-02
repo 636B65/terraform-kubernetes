@@ -4,12 +4,20 @@ locals {
 
 # The Ubuntu 26.04 cloud image is downloaded once to the node.
 resource "proxmox_virtual_environment_download_file" "ubuntu" {
+  count = var.ubuntu_image_file_id == null ? 1 : 0
+
   node_name    = var.proxmox_node
   datastore_id = var.image_datastore
   content_type = "iso"
   file_name    = "ubuntu-26.04-server-cloudimg-amd64.img"
   url          = var.ubuntu_image_url
   overwrite    = false
+}
+
+# Keeps the image of deployments made before ubuntu_image_file_id existed.
+moved {
+  from = proxmox_virtual_environment_download_file.ubuntu
+  to   = proxmox_virtual_environment_download_file.ubuntu[0]
 }
 
 # cloud-init user-data (user, password, SSH) per VM.
@@ -61,7 +69,7 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
   disk {
     datastore_id = var.vm_datastore
-    file_id      = proxmox_virtual_environment_download_file.ubuntu.id
+    file_id      = coalesce(var.ubuntu_image_file_id, one(proxmox_virtual_environment_download_file.ubuntu[*].id))
     interface    = "scsi0"
     size         = each.value.disk_gb
     discard      = "on"

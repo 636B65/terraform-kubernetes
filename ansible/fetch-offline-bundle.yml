@@ -1,0 +1,52 @@
+---
+# Packs the offline bundle staged by ansible-role-kubernetes (--tags
+# offline_stage) on the first controller and fetches it to the machine running
+# Ansible. The controller's bundle includes the Cilium assets, so it serves
+# every node. Run with -e offline_bundle=/path/to/kubernetes-offline.tar.
+
+- name: Fetch the offline bundle from the first controller
+  hosts: k8s_control_plane[0]
+  gather_facts: false
+  vars:
+    offline_dir: "{{ kubernetes_offline_assets_directory | default('/opt/kubernetes-offline') }}"
+    remote_archive: /var/tmp/kubernetes-offline.tar
+  tasks:
+    - name: Check that a bundle was staged
+      ansible.builtin.stat:
+        path: "{{ offline_dir }}/VERSIONS"
+      register: versions
+      become: true
+
+    - name: Fail without a staged bundle
+      ansible.builtin.fail:
+        msg: "No bundle in {{ offline_dir }}. Run the role with --tags offline_stage first."
+      when: not versions.stat.exists
+
+    - name: Pack the bundle
+      ansible.builtin.command: tar -C {{ offline_dir | quote }} -cf {{ remote_archive }} .
+      changed_when: true
+      become: true
+
+    - name: Let the SSH user read the archive
+      ansible.builtin.file:
+        path: "{{ remote_archive }}"
+        owner: "{{ ansible_user }}"
+        mode: "0600"
+      become: true
+
+    # Without privilege escalation, fetch streams the file instead of reading
+    # it into memory. ansible_become is set in the inventory, so it is turned
+    # off with a variable (variables take precedence over the become keyword).
+    - name: Fetch the archive
+      ansible.builtin.fetch:
+        src: "{{ remote_archive }}"
+        dest: "{{ offline_bundle }}"
+        flat: true
+      vars:
+        ansible_become: false
+
+    - name: Remove the archive from the controller
+      ansible.builtin.file:
+        path: "{{ remote_archive }}"
+        state: absent
+      become: true

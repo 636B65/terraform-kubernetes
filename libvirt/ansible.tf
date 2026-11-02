@@ -16,6 +16,9 @@ module "ansible" {
   keepalived_auth_pass = var.kubernetes_keepalived_auth_pass
   extra_vars           = var.ansible_extra_vars
   playbook_args        = var.ansible_playbook_args
+  offline              = var.offline
+  offline_bundle       = var.offline_bundle
+  stage_bundle         = var.stage_offline_bundle
 
   depends_on = [libvirt_domain.vm]
 }

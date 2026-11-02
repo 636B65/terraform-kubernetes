@@ -64,6 +64,7 @@ jobs:
         run: |
           printf 'all:\n  children:\n    k8s_control_plane:\n      hosts: { cp: { ansible_host: 192.0.2.1 } }\n    k8s_workers:\n      hosts: { wl: { ansible_host: 192.0.2.2 } }\n' > inventory.yml
           ansible-playbook -i inventory.yml --syntax-check ansible/site.yml
+          ansible-playbook -i inventory.yml --syntax-check ansible/fetch-offline-bundle.yml
 
   release:
     name: Tag and create release
