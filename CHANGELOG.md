@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Default `ansible_role_version` is `v3.1.1`, which fixes registry pushes and
+  verification failing (HTTP 500 or stale 404) on the shared registry volume.
+
 ## [0.6.0] - 2026-11-02
 
 ### Added
