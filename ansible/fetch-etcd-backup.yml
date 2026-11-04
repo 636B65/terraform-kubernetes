@@ -1,0 +1,48 @@
+---
+# Fetches the newest etcd snapshot and Kubernetes configuration archive that
+# the scheduled backup of ansible-role-kubernetes saved on every controller
+# (see its docs/etcd-backup-restore.md). Run with
+# -e etcd_backup_dir=/path/to/backups; files land in <dir>/<controller>/.
+
+- name: Fetch the newest etcd backups from the controllers
+  hosts: k8s_control_plane
+  gather_facts: false
+  vars:
+    backup_dir: "{{ kubernetes_etcd_backup_directory | default('/var/backups/kubernetes-etcd') }}"
+  tasks:
+    - name: Find the backups
+      ansible.builtin.find:
+        paths: "{{ backup_dir }}"
+        patterns:
+          - etcd-snapshot-{{ inventory_hostname }}-*.db
+          - kubernetes-config-{{ inventory_hostname }}-*.tar.gz
+      register: backups
+      become: true
+
+    - name: Fail without backups
+      ansible.builtin.fail:
+        msg: "No backups in {{ backup_dir }} on {{ inventory_hostname }}. Is kubernetes_etcd_backup_enabled on, and has the timer run?"
+      when: backups.files | selectattr('path', 'search', '\\.db$') | list | length == 0
+
+    - name: Select the newest snapshot and configuration archive
+      ansible.builtin.set_fact:
+        newest_backups: >-
+          {{
+            [
+              backups.files | selectattr('path', 'search', '\.db$') | sort(attribute='mtime') | last,
+            ]
+            + (
+              [backups.files | selectattr('path', 'search', '\.tar\.gz$') | sort(attribute='mtime') | last]
+              if backups.files | selectattr('path', 'search', '\.tar\.gz$') | list | length > 0 else []
+            )
+          }}
+
+    - name: Fetch the backups
+      ansible.builtin.fetch:
+        src: "{{ item.path }}"
+        dest: "{{ etcd_backup_dir }}/{{ inventory_hostname }}/"
+        flat: true
+      loop: "{{ newest_backups }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      become: true

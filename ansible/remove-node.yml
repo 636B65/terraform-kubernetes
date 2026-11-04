@@ -1,0 +1,18 @@
+---
+# Drains and removes the nodes in kubernetes_remove_nodes from the cluster,
+# one at a time, with the remove_node tasks of ansible-role-kubernetes (see its
+# docs/scaling.md). The VMs keep running; remove them from vms afterwards.
+# Run with -e '{"kubernetes_remove_nodes": ["kube-wl03"]}'.
+
+- name: Remove nodes from the Kubernetes cluster
+  hosts: k8s_control_plane:k8s_workers
+  become: true
+  any_errors_fatal: true
+  gather_facts: true
+  serial: 1
+  order: inventory
+  tasks:
+    - name: Remove the selected nodes
+      ansible.builtin.import_role:
+        name: ansible-role-kubernetes
+        tasks_from: remove_node

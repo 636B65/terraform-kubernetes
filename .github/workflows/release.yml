@@ -63,12 +63,65 @@ jobs:
           ANSIBLE_ROLES_PATH: roles
         run: |
           printf 'all:\n  children:\n    k8s_control_plane:\n      hosts: { cp: { ansible_host: 192.0.2.1 } }\n    k8s_workers:\n      hosts: { wl: { ansible_host: 192.0.2.2 } }\n' > inventory.yml
-          ansible-playbook -i inventory.yml --syntax-check ansible/site.yml
-          ansible-playbook -i inventory.yml --syntax-check ansible/fetch-offline-bundle.yml
+          for playbook in ansible/*.yml; do
+            ansible-playbook -i inventory.yml --syntax-check "$playbook"
+          done
+
+  test:
+    name: terraform test ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [cloud-init, ansible]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+
+      - name: terraform init
+        working-directory: modules/${{ matrix.module }}
+        run: terraform init -backend=false -input=false
+
+      - name: terraform test
+        working-directory: modules/${{ matrix.module }}
+        run: terraform test
+
+  lint:
+    name: Lint (pre-commit, tflint) and security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+
+      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
+        with:
+          tflint_version: v0.65.0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: tflint --init
+        run: tflint --init --config "$GITHUB_WORKSPACE/.tflint.hcl"
+
+      - name: pre-commit (fmt, tflint, shellcheck, common variables, YAML)
+        run: |
+          pip install pre-commit
+          pre-commit run --all-files --show-diff-on-failure
+
+      - name: Trivy misconfiguration scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
 
   release:
     name: Tag and create release
-    needs: [validate, ansible]
+    needs: [validate, ansible, test, lint]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

@@ -17,6 +17,13 @@ data "vsphere_network" "net" {
   datacenter_id = data.vsphere_datacenter.dc.id
 }
 
+data "vsphere_network" "secondary" {
+  count = var.secondary_network == null ? 0 : 1
+
+  name          = var.secondary_network
+  datacenter_id = data.vsphere_datacenter.dc.id
+}
+
 data "vsphere_virtual_machine" "template" {
   name          = var.template_name
   datacenter_id = data.vsphere_datacenter.dc.id
@@ -39,8 +46,20 @@ resource "vsphere_virtual_machine" "vm" {
   scsi_type = data.vsphere_virtual_machine.template.scsi_type
 
   network_interface {
-    network_id   = data.vsphere_network.net.id
-    adapter_type = data.vsphere_virtual_machine.template.network_interface_types[0]
+    network_id     = data.vsphere_network.net.id
+    adapter_type   = data.vsphere_virtual_machine.template.network_interface_types[0]
+    use_static_mac = each.value.macs != null
+    mac_address    = each.value.macs == null ? null : each.value.macs[0]
+  }
+
+  dynamic "network_interface" {
+    for_each = each.value.macs == null ? [] : [each.value.macs[1]]
+    content {
+      network_id     = one(data.vsphere_network.secondary[*].id)
+      adapter_type   = data.vsphere_virtual_machine.template.network_interface_types[0]
+      use_static_mac = true
+      mac_address    = network_interface.value
+    }
   }
 
   disk {
@@ -67,4 +86,11 @@ resource "vsphere_virtual_machine" "vm" {
   }
 
   wait_for_guest_net_timeout = 10
+
+  lifecycle {
+    precondition {
+      condition     = each.value.secondary_ip == null || var.secondary_network != null
+      error_message = "VMs with a secondary_ip need secondary_network."
+    }
+  }
 }

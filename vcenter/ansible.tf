@@ -19,6 +19,9 @@ module "ansible" {
   offline              = var.offline
   offline_bundle       = var.offline_bundle
   stage_bundle         = var.stage_offline_bundle
+  remove_nodes         = var.remove_nodes
+  upgrade              = var.kubernetes_upgrade
+  etcd_backup_dir      = var.etcd_backup_dir
 
   depends_on = [vsphere_virtual_machine.vm]
 }

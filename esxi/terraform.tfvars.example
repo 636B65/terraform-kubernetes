@@ -40,7 +40,7 @@ run_ansible                     = false
 # Key for Ansible (its public key must be in ssh_public_keys). Without it the
 # password is used, which requires sshpass.
 # ansible_ssh_private_key_file  = "~/.ssh/id_ed25519"
-ansible_role_version            = "v3.1.1"
+ansible_role_version            = "v3.2.0"
 kubernetes_api_vip              = "192.168.1.100" # free IP, not used by any VM
 kubernetes_keepalived_auth_pass = "k8s-vip1" # at most 8 characters
 # ansible_extra_vars = { kubernetes_observability_enabled = true }
@@ -54,3 +54,17 @@ kubernetes_keepalived_auth_pass = "k8s-vip1" # at most 8 characters
 # offline_bundle = "~/kubernetes-offline.tar"
 # ntp_servers    = ["10.0.0.5"]
 # apt_mirror     = "http://mirror.lab.local/ubuntu" # optional internal mirror
+
+# --- IPv6 and a second NIC (see README "Networking") ---------------------------
+# Per VM: ipv6 = "2001:db8::101", secondary_ip = "10.10.0.101" in vms.
+# ipv6_gateway            = "2001:db8::1"
+# secondary_prefix_length = 24
+# secondary_network = "Storage Network"
+
+# --- Image verification -----------------------------------------------------------
+# ubuntu_image_sha256 = "..." # verifies a local ubuntu_ova at plan time
+
+# --- Cluster operations (need run_ansible = true) ---------------------------------
+# remove_nodes       = ["kube-wl03"] # drain + remove; delete from vms in a later apply
+# kubernetes_upgrade = true          # rolling upgrade when the role version changes
+# ansible_extra_vars = { kubernetes_ingress_enabled = true, kubernetes_cert_manager_enabled = true, kubernetes_argocd_enabled = true }

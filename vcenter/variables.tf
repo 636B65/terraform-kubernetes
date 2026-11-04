@@ -3,11 +3,13 @@
 # ---------------------------------------------------------------------------
 
 variable "vms" {
-  description = "VMs to create. Key = VM name, hostname and Kubernetes node name. role is the Kubernetes role (control_plane or worker) used in the Ansible inventory. ansible_host optionally sets the address Ansible connects to (e.g. a DNS name); ip is then passed as kubernetes_node_ip. cpu, memory_mb and disk_gb can be set per VM, otherwise the defaults below are used."
+  description = "VMs to create. Key = VM name, hostname and Kubernetes node name. role is the Kubernetes role (control_plane or worker) used in the Ansible inventory. ansible_host optionally sets the address Ansible connects to (e.g. a DNS name); ip is then passed as kubernetes_node_ip. ipv6 adds a static IPv6 address to the primary NIC. secondary_ip adds a second NIC on secondary_network with that IPv4 address. cpu, memory_mb and disk_gb can be set per VM, otherwise the defaults below are used."
   type = map(object({
     ip           = string
     role         = optional(string, "worker")
     ansible_host = optional(string)
+    ipv6         = optional(string)
+    secondary_ip = optional(string)
     cpu          = optional(number)
     memory_mb    = optional(number)
     disk_gb      = optional(number)
@@ -32,6 +34,21 @@ variable "vms" {
   }
 
   validation {
+    condition     = alltrue([for vm in values(var.vms) : vm.ipv6 == null || can(cidrhost("${coalesce(vm.ipv6, "::")}/128", 0))])
+    error_message = "ipv6 must be an IPv6 address without /prefix."
+  }
+
+  validation {
+    condition     = alltrue([for vm in values(var.vms) : vm.secondary_ip == null || can(cidrhost("${coalesce(vm.secondary_ip, "0.0.0.0")}/32", 0))])
+    error_message = "secondary_ip must be an IPv4 address without /prefix."
+  }
+
+  validation {
+    condition     = length(distinct(compact([for vm in values(var.vms) : vm.secondary_ip]))) == length(compact([for vm in values(var.vms) : vm.secondary_ip]))
+    error_message = "Every secondary_ip must be unique."
+  }
+
+  validation {
     condition     = length(distinct([for vm in values(var.vms) : vm.ip])) == length(var.vms)
     error_message = "Every VM must have a unique IP address."
   }
@@ -51,6 +68,24 @@ variable "ip_prefix_length" {
 variable "gateway" {
   description = "Default gateway for the VMs."
   type        = string
+}
+
+variable "ipv6_prefix_length" {
+  description = "IPv6 prefix length for the per-VM ipv6 addresses."
+  type        = number
+  default     = 64
+}
+
+variable "ipv6_gateway" {
+  description = "IPv6 default gateway, or null for no IPv6 default route."
+  type        = string
+  default     = null
+}
+
+variable "secondary_prefix_length" {
+  description = "Prefix length of the second NIC's network (per-VM secondary_ip). The second NIC gets no default route."
+  type        = number
+  default     = 24
 }
 
 variable "dns_servers" {
@@ -138,7 +173,7 @@ variable "ansible_role_source" {
 variable "ansible_role_version" {
   description = "Tag, branch or commit of ansible-role-kubernetes to use. Kept up to date by the track-ansible-role workflow."
   type        = string
-  default     = "v3.1.1"
+  default     = "v3.2.0"
 }
 
 variable "kubernetes_api_vip" {
@@ -217,6 +252,28 @@ variable "stage_offline_bundle" {
 }
 
 # ---------------------------------------------------------------------------
+# Cluster operations (need run_ansible = true)
+# ---------------------------------------------------------------------------
+
+variable "remove_nodes" {
+  description = "VMs to drain and remove from the Kubernetes cluster with the role's remove_node tasks. The VMs keep running: remove them from vms in a later apply. Add a VM to vms to join a new node."
+  type        = list(string)
+  default     = []
+}
+
+variable "kubernetes_upgrade" {
+  description = "Run the role's rolling upgrade (one node at a time) whenever ansible_role_version or ansible_extra_vars change, e.g. after raising the role version or setting kubernetes_version."
+  type        = bool
+  default     = false
+}
+
+variable "etcd_backup_dir" {
+  description = "Local directory that the etcd_backup_command output fetches the newest etcd backups into. null = .ansible/etcd-backups."
+  type        = string
+  default     = null
+}
+
+# ---------------------------------------------------------------------------
 # vCenter
 # ---------------------------------------------------------------------------
 
@@ -261,6 +318,12 @@ variable "network" {
   description = "Port group/network, e.g. 'VM Network'."
   type        = string
   default     = "VM Network"
+}
+
+variable "secondary_network" {
+  description = "Port group for the second NIC of VMs with a secondary_ip. Its VLAN is set on the port group."
+  type        = string
+  default     = null
 }
 
 variable "vm_folder" {

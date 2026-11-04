@@ -3,8 +3,41 @@ locals {
 }
 
 # The Ubuntu 26.04 cloud image is downloaded once to the node.
+# SHA256SUMS published next to the image, used when ubuntu_image_sha256 is not
+# set, to look up the checksum the node verifies the download against.
+data "http" "ubuntu_sha256sums" {
+  count = var.ubuntu_image_file_id == null && var.ubuntu_image_sha256 == null && var.verify_ubuntu_image ? 1 : 0
+
+  url = replace(var.ubuntu_image_url, "//[^/]*$/", "/SHA256SUMS")
+
+  lifecycle {
+    postcondition {
+      condition     = self.status_code == 200
+      error_message = "Could not read SHA256SUMS next to ubuntu_image_url (HTTP ${self.status_code}). Set ubuntu_image_sha256, or verify_ubuntu_image = false."
+    }
+  }
+}
+
+locals {
+  ubuntu_image_name = regex("[^/]*$", var.ubuntu_image_url)
+
+  # Expected SHA256 of the image: given, looked up in SHA256SUMS, or none.
+  ubuntu_image_sha256 = (
+    var.ubuntu_image_sha256 != null ? lower(var.ubuntu_image_sha256) :
+    length(data.http.ubuntu_sha256sums) == 0 ? null :
+    try(
+      regex("(?m)^([0-9a-f]{64}) [ *]${replace(local.ubuntu_image_name, ".", "\\.")}$", data.http.ubuntu_sha256sums[0].response_body)[0],
+      null,
+    )
+  )
+}
+
 resource "proxmox_virtual_environment_download_file" "ubuntu" {
   count = var.ubuntu_image_file_id == null ? 1 : 0
+
+  # The node verifies the downloaded image against this checksum.
+  checksum           = local.ubuntu_image_sha256
+  checksum_algorithm = local.ubuntu_image_sha256 == null ? null : "sha256"
 
   node_name    = var.proxmox_node
   datastore_id = var.image_datastore
@@ -12,6 +45,13 @@ resource "proxmox_virtual_environment_download_file" "ubuntu" {
   file_name    = "ubuntu-26.04-server-cloudimg-amd64.img"
   url          = var.ubuntu_image_url
   overwrite    = false
+
+  lifecycle {
+    precondition {
+      condition     = !var.verify_ubuntu_image || local.ubuntu_image_sha256 != null
+      error_message = "No SHA256 for ${local.ubuntu_image_name} in SHA256SUMS. Set ubuntu_image_sha256, or verify_ubuntu_image = false."
+    }
+  }
 }
 
 # Keeps the image of deployments made before ubuntu_image_file_id existed.
@@ -80,9 +120,20 @@ resource "proxmox_virtual_environment_vm" "vm" {
   scsi_hardware = "virtio-scsi-single"
 
   network_device {
-    bridge  = var.network_bridge
-    model   = "virtio"
-    vlan_id = var.vlan_id
+    bridge      = var.network_bridge
+    model       = "virtio"
+    vlan_id     = var.vlan_id
+    mac_address = each.value.macs == null ? null : upper(each.value.macs[0])
+  }
+
+  dynamic "network_device" {
+    for_each = each.value.macs == null ? [] : [each.value.macs[1]]
+    content {
+      bridge      = var.secondary_bridge
+      model       = "virtio"
+      vlan_id     = var.secondary_vlan_id
+      mac_address = upper(network_device.value)
+    }
   }
 
   # Ubuntu cloud images expect a serial console.
@@ -96,6 +147,24 @@ resource "proxmox_virtual_environment_vm" "vm" {
         address = "${each.value.ip}/${var.ip_prefix_length}"
         gateway = var.gateway
       }
+
+      dynamic "ipv6" {
+        for_each = each.value.ipv6 == null ? [] : [each.value.ipv6]
+        content {
+          address = "${ipv6.value}/${var.ipv6_prefix_length}"
+          gateway = var.ipv6_gateway
+        }
+      }
+    }
+
+    # The second ip_config belongs to the second network_device.
+    dynamic "ip_config" {
+      for_each = each.value.secondary_ip == null ? [] : [each.value.secondary_ip]
+      content {
+        ipv4 {
+          address = "${ip_config.value}/${var.secondary_prefix_length}"
+        }
+      }
     }
 
     dns {
@@ -108,5 +177,10 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
   lifecycle {
     ignore_changes = [disk[0].file_id]
+
+    precondition {
+      condition     = each.value.secondary_ip == null || var.secondary_bridge != null
+      error_message = "VMs with a secondary_ip need secondary_bridge."
+    }
   }
 }

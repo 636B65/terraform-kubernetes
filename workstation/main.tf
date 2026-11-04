@@ -22,8 +22,13 @@ resource "terraform_data" "vm" {
     cpu       = each.value.cpu
     memory_mb = each.value.memory_mb
     disk_gb   = each.value.disk_gb
-    metadata  = sha256(module.cloud_init.meta_data[each.key])
-    userdata  = sha256(module.cloud_init.user_data[each.key])
+    # The second NIC's vnet counts only for VMs that have one, so the value
+    # of single-NIC VMs stays the same.
+    metadata = sha256(join("", [
+      module.cloud_init.meta_data[each.key],
+      each.value.macs == null ? "" : coalesce(var.secondary_vnet, "-"),
+    ]))
+    userdata = sha256(module.cloud_init.user_data[each.key])
   }
 
   # What destroy needs (provisioners with when = destroy may only read self).
@@ -50,6 +55,17 @@ resource "terraform_data" "vm" {
       METADATA_B64 = base64encode(module.cloud_init.meta_data[each.key])
       USERDATA_B64 = base64encode(module.cloud_init.user_data[each.key])
       START_MODE   = var.start_gui ? "gui" : "nogui"
+      # Fixed MACs and the second NIC's vnet; empty = single NIC as cloned.
+      MAC1           = each.value.macs == null ? "" : each.value.macs[0]
+      MAC2           = each.value.macs == null ? "" : each.value.macs[1]
+      SECONDARY_VNET = each.value.macs == null ? "" : coalesce(var.secondary_vnet, "-")
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = each.value.secondary_ip == null || var.secondary_vnet != null
+      error_message = "VMs with a secondary_ip need secondary_vnet."
     }
   }
 

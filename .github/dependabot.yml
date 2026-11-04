@@ -6,3 +6,21 @@ updates:
       interval: weekly
     commit-message:
       prefix: ci
+
+  - package-ecosystem: terraform
+    directories:
+      - /proxmox
+      - /vcenter
+      - /esxi
+      - /workstation
+      - /libvirt
+      - /virtualbox
+      - /modules/ansible
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: deps
+    groups:
+      terraform-providers:
+        patterns:
+          - "*"

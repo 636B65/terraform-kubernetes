@@ -58,9 +58,49 @@ public static class SeedIsoWriter {
     [SeedIsoWriter]::Write($Path, $result.ImageStream, $result.BlockSize, $result.TotalBlocks)
 }
 
+# Returns the VBoxManage modifyvm arguments that attach NIC <n>.
+function Get-NicArgs {
+    param([int]$N, [string]$Type, [string]$Name)
+    $attach = switch ($Type) {
+        'bridged'     { @("--nic$N", 'bridged', "--bridgeadapter$N", $Name) }
+        'hostonly'    { @("--nic$N", 'hostonly', "--hostonlyadapter$N", $Name) }
+        'hostonlynet' { @("--nic$N", 'hostonlynet', "--host-only-net$N", $Name) }
+        'natnetwork'  { @("--nic$N", 'natnetwork', "--nat-network$N", $Name) }
+        default       { throw "Unknown network type: $Type" }
+    }
+    return $attach + @("--nictype$N", 'virtio', "--cableconnected$N", 'on')
+}
+
 function Write-Base64File {
     param([string]$Value, [string]$Path)
     [System.IO.File]::WriteAllBytes($Path, [System.Convert]::FromBase64String($Value))
+}
+
+# Checks $env:OVA against OVA_SHA256, or against the SHA256SUMS next to the URL
+# it was downloaded from. A local file without OVA_SHA256 is not verified.
+function Test-Ova {
+    if ($env:VERIFY_SHA256 -eq '0') { return }
+    $expected = $env:OVA_SHA256
+    if (-not $expected) {
+        if ($env:OVA_SOURCE -notmatch '^https?://') {
+            Write-Host "Note: $env:OVA is not verified; set ubuntu_image_sha256 to verify a local file."
+            return
+        }
+        $base = $env:OVA_SOURCE.Substring(0, $env:OVA_SOURCE.LastIndexOf('/'))
+        $name = $env:OVA_SOURCE.Substring($env:OVA_SOURCE.LastIndexOf('/') + 1)
+        $sums = (Invoke-WebRequest -Uri "$base/SHA256SUMS" -UseBasicParsing).Content
+        if ($sums -is [byte[]]) { $sums = [System.Text.Encoding]::UTF8.GetString($sums) }
+        $line = $sums -split "`n" | Where-Object { $_ -match "^([0-9a-f]{64}) [ *]$([regex]::Escape($name))\s*$" } | Select-Object -First 1
+        if (-not $line) {
+            throw "No SHA256 for $name in $base/SHA256SUMS. Set ubuntu_image_sha256, or verify_ubuntu_image = false."
+        }
+        $expected = $line.Substring(0, 64)
+    }
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $env:OVA).Hash.ToLower()
+    if ($expected.ToLower() -ne $actual) {
+        throw "SHA256 of $env:OVA is $actual, expected $expected."
+    }
+    Write-Host "Verified SHA256 of $env:OVA"
 }
 
 switch ($Action) {
@@ -78,6 +118,7 @@ switch ($Action) {
         } elseif (-not (Test-Path -LiteralPath $env:OVA)) {
             throw "$env:OVA not found."
         }
+        Test-Ova
     }
 
     'create' {
@@ -126,17 +167,17 @@ switch ($Action) {
             Write-Warning "[$env:VM_NAME] Could not expand the disk (is it already larger?): $_"
         }
 
-        $nic = switch ($env:NETWORK_TYPE) {
-            'bridged'     { @('--nic1', 'bridged', '--bridgeadapter1', $env:NETWORK_NAME) }
-            'hostonly'    { @('--nic1', 'hostonly', '--hostonlyadapter1', $env:NETWORK_NAME) }
-            'hostonlynet' { @('--nic1', 'hostonlynet', '--host-only-net1', $env:NETWORK_NAME) }
-            'natnetwork'  { @('--nic1', 'natnetwork', '--nat-network1', $env:NETWORK_NAME) }
-            default       { throw "Unknown network type: $env:NETWORK_TYPE" }
+        $nic = Get-NicArgs 1 $env:NETWORK_TYPE $env:NETWORK_NAME
+        if ($env:MAC1) { $nic += @('--macaddress1', $env:MAC1) }
+        # A second NIC (with fixed MACs, so the guest can tell the NICs apart).
+        if ($env:SECONDARY_NETWORK_TYPE) {
+            $nic += Get-NicArgs 2 $env:SECONDARY_NETWORK_TYPE $env:SECONDARY_NETWORK_NAME
+            $nic += @('--macaddress2', $env:MAC2)
         }
 
         # Ubuntu cloud images log to ttyS0 and boot slowly without a serial port.
         Write-Host "[$env:VM_NAME] Setting network, serial console and cloud-init seed"
-        Invoke-VBox (@('modifyvm', $env:VM_NAME) + $nic + @('--nictype1', 'virtio', '--cableconnected1', 'on',
+        Invoke-VBox (@('modifyvm', $env:VM_NAME) + $nic + @(
             '--uart1', '0x3F8', '4', '--uartmode1', 'file', (Join-Path $vmDir 'console.log'),
             '--description', 'Ubuntu 26.04 - managed by Terraform'))
 

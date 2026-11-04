@@ -3,11 +3,13 @@
 # ---------------------------------------------------------------------------
 
 variable "vms" {
-  description = "VMs to create. Key = VM name, hostname and Kubernetes node name. role is the Kubernetes role (control_plane or worker) used in the Ansible inventory. ansible_host optionally sets the address Ansible connects to (e.g. a DNS name); ip is then passed as kubernetes_node_ip. cpu, memory_mb and disk_gb can be set per VM, otherwise the defaults below are used."
+  description = "VMs to create. Key = VM name, hostname and Kubernetes node name. role is the Kubernetes role (control_plane or worker) used in the Ansible inventory. ansible_host optionally sets the address Ansible connects to (e.g. a DNS name); ip is then passed as kubernetes_node_ip. ipv6 adds a static IPv6 address to the primary NIC. secondary_ip adds a second NIC on secondary_network with that IPv4 address. cpu, memory_mb and disk_gb can be set per VM, otherwise the defaults below are used."
   type = map(object({
     ip           = string
     role         = optional(string, "worker")
     ansible_host = optional(string)
+    ipv6         = optional(string)
+    secondary_ip = optional(string)
     cpu          = optional(number)
     memory_mb    = optional(number)
     disk_gb      = optional(number)
@@ -32,6 +34,21 @@ variable "vms" {
   }
 
   validation {
+    condition     = alltrue([for vm in values(var.vms) : vm.ipv6 == null || can(cidrhost("${coalesce(vm.ipv6, "::")}/128", 0))])
+    error_message = "ipv6 must be an IPv6 address without /prefix."
+  }
+
+  validation {
+    condition     = alltrue([for vm in values(var.vms) : vm.secondary_ip == null || can(cidrhost("${coalesce(vm.secondary_ip, "0.0.0.0")}/32", 0))])
+    error_message = "secondary_ip must be an IPv4 address without /prefix."
+  }
+
+  validation {
+    condition     = length(distinct(compact([for vm in values(var.vms) : vm.secondary_ip]))) == length(compact([for vm in values(var.vms) : vm.secondary_ip]))
+    error_message = "Every secondary_ip must be unique."
+  }
+
+  validation {
     condition     = length(distinct([for vm in values(var.vms) : vm.ip])) == length(var.vms)
     error_message = "Every VM must have a unique IP address."
   }
@@ -51,6 +68,24 @@ variable "ip_prefix_length" {
 variable "gateway" {
   description = "Default gateway for the VMs."
   type        = string
+}
+
+variable "ipv6_prefix_length" {
+  description = "IPv6 prefix length for the per-VM ipv6 addresses."
+  type        = number
+  default     = 64
+}
+
+variable "ipv6_gateway" {
+  description = "IPv6 default gateway, or null for no IPv6 default route."
+  type        = string
+  default     = null
+}
+
+variable "secondary_prefix_length" {
+  description = "Prefix length of the second NIC's network (per-VM secondary_ip). The second NIC gets no default route."
+  type        = number
+  default     = 24
 }
 
 variable "dns_servers" {
@@ -138,7 +173,7 @@ variable "ansible_role_source" {
 variable "ansible_role_version" {
   description = "Tag, branch or commit of ansible-role-kubernetes to use. Kept up to date by the track-ansible-role workflow."
   type        = string
-  default     = "v3.1.1"
+  default     = "v3.2.0"
 }
 
 variable "kubernetes_api_vip" {
@@ -214,6 +249,28 @@ variable "stage_offline_bundle" {
   description = "After installing the (online) cluster, stage an offline bundle with ansible-role-kubernetes (--tags offline_stage) and fetch it from the first controller to offline_bundle. Requires run_ansible = true."
   type        = bool
   default     = false
+}
+
+# ---------------------------------------------------------------------------
+# Cluster operations (need run_ansible = true)
+# ---------------------------------------------------------------------------
+
+variable "remove_nodes" {
+  description = "VMs to drain and remove from the Kubernetes cluster with the role's remove_node tasks. The VMs keep running: remove them from vms in a later apply. Add a VM to vms to join a new node."
+  type        = list(string)
+  default     = []
+}
+
+variable "kubernetes_upgrade" {
+  description = "Run the role's rolling upgrade (one node at a time) whenever ansible_role_version or ansible_extra_vars change, e.g. after raising the role version or setting kubernetes_version."
+  type        = bool
+  default     = false
+}
+
+variable "etcd_backup_dir" {
+  description = "Local directory that the etcd_backup_command output fetches the newest etcd backups into. null = .ansible/etcd-backups."
+  type        = string
+  default     = null
 }
 
 # ---------------------------------------------------------------------------
@@ -306,6 +363,18 @@ variable "vlan_id" {
   default     = null
 }
 
+variable "secondary_bridge" {
+  description = "Linux bridge for the second NIC of VMs with a secondary_ip."
+  type        = string
+  default     = null
+}
+
+variable "secondary_vlan_id" {
+  description = "VLAN tag of the second NIC (null = none)."
+  type        = number
+  default     = null
+}
+
 variable "vm_id_start" {
   description = "First VM ID. The VMs get consecutive IDs starting here."
   type        = number
@@ -322,6 +391,23 @@ variable "ubuntu_image_url" {
   description = "URL of the Ubuntu 26.04 cloud image, downloaded by the Proxmox node. On an offline network, point it at an internal web server or set ubuntu_image_file_id."
   type        = string
   default     = "https://cloud-images.ubuntu.com/releases/26.04/release/ubuntu-26.04-server-cloudimg-amd64.img"
+}
+
+variable "ubuntu_image_sha256" {
+  description = "Expected SHA256 of the image at ubuntu_image_url. null = look it up in the SHA256SUMS file next to the URL (when verify_ubuntu_image is on)."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.ubuntu_image_sha256 == null || can(regex("^[0-9a-fA-F]{64}$", coalesce(var.ubuntu_image_sha256, "x")))
+    error_message = "ubuntu_image_sha256 must be 64 hexadecimal characters."
+  }
+}
+
+variable "verify_ubuntu_image" {
+  description = "Let the node verify the downloaded image's SHA256."
+  type        = bool
+  default     = true
 }
 
 variable "ubuntu_image_file_id" {

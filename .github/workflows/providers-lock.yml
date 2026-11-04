@@ -1,0 +1,42 @@
+name: Update provider lock files
+
+# Regenerates .terraform.lock.hcl in every platform directory with checksums
+# for Linux, macOS and Windows, and commits them to the branch it runs on.
+# Run it after changing a provider version constraint (Dependabot updates the
+# lock files of its own pull requests).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+
+      - name: Lock the providers for every platform directory
+        run: |
+          for dir in proxmox vcenter esxi workstation libvirt virtualbox; do
+            echo "== $dir"
+            (cd "$dir" && terraform init -backend=false -input=false -upgrade >/dev/null && terraform providers lock \
+              -platform=linux_amd64 -platform=linux_arm64 \
+              -platform=darwin_amd64 -platform=darwin_arm64 \
+              -platform=windows_amd64)
+          done
+
+      - name: Commit the lock files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- */.terraform.lock.hcl
+          if git diff --cached --quiet; then
+            echo "Lock files are up to date."
+          else
+            git commit -m "Update provider lock files"
+            git push
+          fi

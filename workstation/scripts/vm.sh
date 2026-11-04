@@ -38,6 +38,21 @@ case "$action" in
     set_vmx guestinfo.userdata "$USERDATA_B64"
     set_vmx guestinfo.userdata.encoding "base64"
 
+    # Fixed MACs (so the guest can tell two NICs apart) and the second NIC.
+    if [[ -n "${MAC1:-}" ]]; then
+      set_vmx ethernet0.addressType "static"
+      set_vmx ethernet0.address "$MAC1"
+    fi
+    if [[ -n "${SECONDARY_VNET:-}" ]]; then
+      echo "[$VM_NAME] Adding a second NIC on $SECONDARY_VNET"
+      set_vmx ethernet1.present "TRUE"
+      set_vmx ethernet1.connectionType "custom"
+      set_vmx ethernet1.vnet "$SECONDARY_VNET"
+      set_vmx ethernet1.virtualDev "vmxnet3"
+      set_vmx ethernet1.addressType "static"
+      set_vmx ethernet1.address "${MAC2:?}"
+    fi
+
     disk="$(grep -iE '^(scsi|sata|nvme|ide)[0-9]+:0\.fileName *=' "$VM_VMX" | grep -i '\.vmdk' | head -n1 | sed -E 's/.*= *"(.*)".*/\1/')"
     if [[ -n "$disk" ]]; then
       [[ "$disk" = /* ]] || disk="$(dirname "$VM_VMX")/$disk"

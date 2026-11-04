@@ -1,8 +1,21 @@
 locals {
+  # Hashing the image takes a few seconds, so it is done once, and only when a
+  # checksum is set.
+  ubuntu_image_verified = (
+    var.ubuntu_image_sha256 == null ? true :
+    can(regex("^https?://", var.ubuntu_image_url)) ? false :
+    filesha256(var.ubuntu_image_url) == lower(var.ubuntu_image_sha256)
+  )
+
   # Either a libvirt network or a host bridge; the unused one stays null.
   interface_source = {
     network = var.network_bridge == null ? { network = var.network_name } : null
     bridge  = var.network_bridge == null ? null : { bridge = var.network_bridge }
+  }
+
+  secondary_interface_source = {
+    network = var.secondary_network_bridge == null ? { network = var.secondary_network_name } : null
+    bridge  = var.secondary_network_bridge == null ? null : { bridge = var.secondary_network_bridge }
   }
 }
 
@@ -11,6 +24,13 @@ locals {
 resource "libvirt_volume" "ubuntu" {
   name = "ubuntu-26.04-server-cloudimg-amd64.qcow2"
   pool = var.storage_pool
+
+  lifecycle {
+    precondition {
+      condition     = local.ubuntu_image_verified
+      error_message = "${var.ubuntu_image_url} does not match ubuntu_image_sha256 (or is a URL, which cannot be verified)."
+    }
+  }
 
   target = {
     format = { type = "qcow2" }
@@ -110,12 +130,22 @@ resource "libvirt_domain" "vm" {
       },
     ]
 
-    interfaces = [
-      {
-        model  = { type = "virtio" }
-        source = local.interface_source
-      },
-    ]
+    interfaces = concat(
+      [
+        {
+          model  = { type = "virtio" }
+          source = local.interface_source
+          mac    = each.value.macs == null ? null : { address = each.value.macs[0] }
+        },
+      ],
+      each.value.macs == null ? [] : [
+        {
+          model  = { type = "virtio" }
+          source = local.secondary_interface_source
+          mac    = { address = each.value.macs[1] }
+        },
+      ],
+    )
 
     graphics = [
       {
@@ -125,5 +155,12 @@ resource "libvirt_domain" "vm" {
         }
       },
     ]
+  }
+
+  lifecycle {
+    precondition {
+      condition     = each.value.secondary_ip == null || var.secondary_network_name != null || var.secondary_network_bridge != null
+      error_message = "VMs with a secondary_ip need secondary_network_name or secondary_network_bridge."
+    }
   }
 }

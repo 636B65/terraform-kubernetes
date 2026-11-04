@@ -74,3 +74,21 @@ variable "stage_bundle" {
   description = "Stage an offline bundle on the cluster and fetch it to offline_bundle."
   type        = bool
 }
+
+variable "remove_nodes" {
+  description = "Nodes to drain and remove from the cluster with the role's remove_node tasks."
+  type        = list(string)
+  default     = []
+}
+
+variable "upgrade" {
+  description = "Run the role's rolling upgrade when the role version or extra variables change."
+  type        = bool
+  default     = false
+}
+
+variable "etcd_backup_dir" {
+  description = "Local directory for fetched etcd backups, used in the etcd_backup_command output. null = .ansible/etcd-backups."
+  type        = string
+  default     = null
+}

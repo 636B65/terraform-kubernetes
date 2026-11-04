@@ -45,6 +45,21 @@ switch ($Action) {
         Set-Vmx 'guestinfo.userdata' $env:USERDATA_B64
         Set-Vmx 'guestinfo.userdata.encoding' 'base64'
 
+        # Fixed MACs (so the guest can tell two NICs apart) and the second NIC.
+        if ($env:MAC1) {
+            Set-Vmx 'ethernet0.addressType' 'static'
+            Set-Vmx 'ethernet0.address' $env:MAC1
+        }
+        if ($env:SECONDARY_VNET) {
+            Write-Host "[$env:VM_NAME] Adding a second NIC on $env:SECONDARY_VNET"
+            Set-Vmx 'ethernet1.present' 'TRUE'
+            Set-Vmx 'ethernet1.connectionType' 'custom'
+            Set-Vmx 'ethernet1.vnet' $env:SECONDARY_VNET
+            Set-Vmx 'ethernet1.virtualDev' 'vmxnet3'
+            Set-Vmx 'ethernet1.addressType' 'static'
+            Set-Vmx 'ethernet1.address' $env:MAC2
+        }
+
         $diskLine = Get-Content -LiteralPath $vmx |
             Where-Object { $_ -match '^(scsi|sata|nvme|ide)\d+:0\.fileName\s*=\s*"(.+\.vmdk)"' } |
             Select-Object -First 1

@@ -11,6 +11,19 @@ vm_state() {
   vbox showvminfo "$VM_NAME" --machinereadable 2>/dev/null | sed -n 's/^VMState="\(.*\)"$/\1/p'
 }
 
+# Prints the VBoxManage modifyvm arguments that attach NIC <n>, one per line.
+nic_args() { # nic_args <n> <type> <name>
+  local n="$1" type="$2" name="$3"
+  case "$type" in
+    bridged)     printf '%s\n' "--nic$n" bridged "--bridgeadapter$n" "$name" ;;
+    hostonly)    printf '%s\n' "--nic$n" hostonly "--hostonlyadapter$n" "$name" ;;
+    hostonlynet) printf '%s\n' "--nic$n" hostonlynet "--host-only-net$n" "$name" ;;
+    natnetwork)  printf '%s\n' "--nic$n" natnetwork "--nat-network$n" "$name" ;;
+    *) echo "Unknown network type: $type" >&2; return 1 ;;
+  esac
+  printf '%s\n' "--nictype$n" virtio "--cableconnected$n" on
+}
+
 # Builds a cloud-init NoCloud seed ISO (volume label "cidata") from a directory.
 make_iso() { # make_iso <dir> <iso>
   local dir="$1" iso="$2"
@@ -26,6 +39,35 @@ make_iso() { # make_iso <dir> <iso>
     echo "Error: install xorriso or genisoimage to build the cloud-init ISO." >&2
     exit 1
   fi
+}
+
+# Checks $OVA against OVA_SHA256, or against the SHA256SUMS next to the URL it
+# was downloaded from. A local file without OVA_SHA256 is not verified.
+verify_ova() {
+  [[ "${VERIFY_SHA256:-1}" == 1 ]] || return 0
+  local expected="${OVA_SHA256:-}" actual
+  if [[ -z "$expected" ]]; then
+    if [[ ! "$OVA_SOURCE" =~ ^https?:// ]]; then
+      echo "Note: $OVA is not verified; set ubuntu_image_sha256 to verify a local file."
+      return 0
+    fi
+    expected="$(curl -fsSL --retry 3 "${OVA_SOURCE%/*}/SHA256SUMS" \
+      | awk -v f="${OVA_SOURCE##*/}" '$2 == f || $2 == "*" f { print $1 }')"
+    if [[ -z "$expected" ]]; then
+      echo "Error: no SHA256 for ${OVA_SOURCE##*/} in ${OVA_SOURCE%/*}/SHA256SUMS. Set ubuntu_image_sha256, or verify_ubuntu_image = false." >&2
+      exit 1
+    fi
+  fi
+  if command -v sha256sum >/dev/null; then
+    actual="$(sha256sum "$OVA" | awk '{ print $1 }')"
+  else
+    actual="$(shasum -a 256 "$OVA" | awk '{ print $1 }')"
+  fi
+  if [[ "$(tr '[:upper:]' '[:lower:]' <<<"$expected")" != "$actual" ]]; then
+    echo "Error: SHA256 of $OVA is $actual, expected $expected." >&2
+    exit 1
+  fi
+  echo "Verified SHA256 of $OVA"
 }
 
 case "$action" in
@@ -44,6 +86,7 @@ case "$action" in
       echo "Error: $OVA not found." >&2
       exit 1
     fi
+    verify_ova
     ;;
 
   create)
@@ -97,17 +140,20 @@ case "$action" in
     vbox modifymedium disk "$disk" --resize $((DISK_GB * 1024)) \
       || echo "[$VM_NAME] Warning: could not expand the disk (is it already larger?)" >&2
 
-    case "$NETWORK_TYPE" in
-      bridged)     nic=(--nic1 bridged --bridgeadapter1 "$NETWORK_NAME") ;;
-      hostonly)    nic=(--nic1 hostonly --hostonlyadapter1 "$NETWORK_NAME") ;;
-      hostonlynet) nic=(--nic1 hostonlynet --host-only-net1 "$NETWORK_NAME") ;;
-      natnetwork)  nic=(--nic1 natnetwork --nat-network1 "$NETWORK_NAME") ;;
-      *) echo "Unknown network type: $NETWORK_TYPE" >&2; exit 1 ;;
-    esac
+    nic=()
+    while IFS= read -r arg; do nic+=("$arg"); done < <(nic_args 1 "$NETWORK_TYPE" "$NETWORK_NAME")
+    if [[ -n "${MAC1:-}" ]]; then
+      nic+=(--macaddress1 "$MAC1")
+    fi
+    # A second NIC (with fixed MACs, so the guest can tell the NICs apart).
+    if [[ -n "${SECONDARY_NETWORK_TYPE:-}" ]]; then
+      while IFS= read -r arg; do nic+=("$arg"); done < <(nic_args 2 "$SECONDARY_NETWORK_TYPE" "$SECONDARY_NETWORK_NAME")
+      nic+=(--macaddress2 "${MAC2:?}")
+    fi
 
     # Ubuntu cloud images log to ttyS0 and boot slowly without a serial port.
     echo "[$VM_NAME] Setting network, serial console and cloud-init seed"
-    vbox modifyvm "$VM_NAME" "${nic[@]}" --nictype1 virtio --cableconnected1 on \
+    vbox modifyvm "$VM_NAME" "${nic[@]}" \
       --uart1 0x3F8 4 --uartmode1 file "$vm_dir/console.log" \
       --description "Ubuntu 26.04 - managed by Terraform"
 

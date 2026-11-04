@@ -28,8 +28,10 @@ resource "terraform_data" "image" {
     command     = "image"
 
     environment = {
-      OVA_SOURCE = var.ubuntu_ova
-      OVA        = local.ova
+      OVA_SOURCE    = var.ubuntu_ova
+      OVA           = local.ova
+      OVA_SHA256    = var.ubuntu_image_sha256 == null ? "" : var.ubuntu_image_sha256
+      VERIFY_SHA256 = var.verify_ubuntu_image ? "1" : "0"
     }
   }
 }
@@ -46,7 +48,12 @@ resource "terraform_data" "vm" {
     network_type = var.network_type
     network_name = var.network_name
     userdata     = sha256(module.cloud_init.user_data[each.key])
-    network      = sha256(yamlencode(module.cloud_init.network_config[each.key]))
+    # The second NIC's network counts only for VMs that have one, so the
+    # value of single-NIC VMs stays the same.
+    network = sha256(join("", [
+      yamlencode(module.cloud_init.network_config[each.key]),
+      each.value.macs == null ? "" : "${var.secondary_network_type}/${coalesce(var.secondary_network_name, "-")}",
+    ]))
   }
 
   # What destroy needs (provisioners with when = destroy may only read self).
@@ -62,19 +69,24 @@ resource "terraform_data" "vm" {
     command     = "create"
 
     environment = {
-      VBOXMANAGE         = local.vboxmanage
-      OVA                = local.ova
-      VM_NAME            = each.key
-      WORK_DIR           = local.work_dir
-      CPU                = each.value.cpu
-      MEMORY_MB          = each.value.memory_mb
-      DISK_GB            = each.value.disk_gb
-      NETWORK_TYPE       = var.network_type
-      NETWORK_NAME       = var.network_name
-      USERDATA_B64       = base64encode(module.cloud_init.user_data[each.key])
-      METADATA_B64       = base64encode(yamlencode({ instance-id = each.key, local-hostname = each.key }))
-      NETWORK_CONFIG_B64 = base64encode(yamlencode(module.cloud_init.network_config[each.key]))
-      START_TYPE         = var.start_gui ? "gui" : "headless"
+      VBOXMANAGE   = local.vboxmanage
+      OVA          = local.ova
+      VM_NAME      = each.key
+      WORK_DIR     = local.work_dir
+      CPU          = each.value.cpu
+      MEMORY_MB    = each.value.memory_mb
+      DISK_GB      = each.value.disk_gb
+      NETWORK_TYPE = var.network_type
+      NETWORK_NAME = var.network_name
+      # VirtualBox takes MACs without separators; empty = no fixed MAC.
+      MAC1                   = each.value.macs == null ? "" : upper(replace(each.value.macs[0], ":", ""))
+      MAC2                   = each.value.macs == null ? "" : upper(replace(each.value.macs[1], ":", ""))
+      SECONDARY_NETWORK_TYPE = each.value.macs == null ? "" : var.secondary_network_type
+      SECONDARY_NETWORK_NAME = each.value.macs == null ? "" : coalesce(var.secondary_network_name, "-")
+      USERDATA_B64           = base64encode(module.cloud_init.user_data[each.key])
+      METADATA_B64           = base64encode(yamlencode({ instance-id = each.key, local-hostname = each.key }))
+      NETWORK_CONFIG_B64     = base64encode(yamlencode(module.cloud_init.network_config[each.key]))
+      START_TYPE             = var.start_gui ? "gui" : "headless"
     }
   }
 
@@ -87,6 +99,13 @@ resource "terraform_data" "vm" {
       VBOXMANAGE = self.input.vboxmanage
       VM_NAME    = self.input.name
       WORK_DIR   = self.input.work_dir
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = each.value.secondary_ip == null || var.secondary_network_name != null
+      error_message = "VMs with a secondary_ip need secondary_network_name (and secondary_network_type)."
     }
   }
 

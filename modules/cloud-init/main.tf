@@ -4,21 +4,44 @@
 
 locals {
   network_config = {
-    for name, ip in var.vms : name => {
+    for name, vm in var.vms : name => {
       version = 2
-      ethernets = {
-        primary = {
-          match     = { name = var.interface_match }
-          dhcp4     = false
-          dhcp6     = false
-          addresses = ["${ip}/${var.ip_prefix_length}"]
-          routes    = [{ to = "default", via = var.gateway }]
-          nameservers = merge(
-            { addresses = var.dns_servers },
-            var.dns_domain == "" ? {} : { search = [var.dns_domain] },
-          )
-        }
-      }
+      ethernets = merge(
+        {
+          primary = {
+            # One NIC: match it by name. Two NICs: match each by its MAC.
+            match = {
+              for k, v in {
+                name       = vm.macs == null ? var.interface_match : null
+                macaddress = vm.macs == null ? null : vm.macs[0]
+              } : k => v if v != null
+            }
+            dhcp4 = false
+            dhcp6 = false
+            addresses = concat(
+              ["${vm.ip}/${var.ip_prefix_length}"],
+              vm.ipv6 == null ? [] : ["${vm.ipv6}/${var.ipv6_prefix_length}"],
+            )
+            routes = concat(
+              [{ to = "default", via = var.gateway }],
+              vm.ipv6 == null || var.ipv6_gateway == null ? [] : [{ to = "::/0", via = var.ipv6_gateway }],
+            )
+            nameservers = merge(
+              { addresses = var.dns_servers },
+              var.dns_domain == "" ? {} : { search = [var.dns_domain] },
+            )
+          }
+        },
+        # Through JSON, so both branches have the same type.
+        jsondecode(vm.macs == null ? "{}" : jsonencode({
+          secondary = {
+            match     = { macaddress = vm.macs[1] }
+            dhcp4     = false
+            dhcp6     = false
+            addresses = ["${vm.secondary_ip}/${var.secondary_prefix_length}"]
+          }
+        })),
+      )
     }
   }
 
@@ -63,7 +86,7 @@ locals {
   ] : []
 
   user_data = {
-    for name, ip in var.vms : name => join("\n", ["#cloud-config", local.optional_sections, yamlencode({
+    for name, vm in var.vms : name => join("\n", ["#cloud-config", local.optional_sections, yamlencode({
       hostname         = name
       fqdn             = var.dns_domain == "" ? name : "${name}.${var.dns_domain}"
       manage_etc_hosts = true
@@ -90,13 +113,13 @@ locals {
         mode      = "reboot"
         message   = "Rebooting to apply the static network configuration"
         timeout   = 30
-        condition = "! ip -4 -o addr show | grep -q ' ${ip}/'"
+        condition = "! ip -4 -o addr show | grep -q ' ${vm.ip}/'"
       }
     })])
   }
 
   meta_data = {
-    for name, ip in var.vms : name => yamlencode({
+    for name, vm in var.vms : name => yamlencode({
       instance-id    = name
       local-hostname = name
       network        = local.network_config[name]

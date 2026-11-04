@@ -1,10 +1,30 @@
 variable "vms" {
-  description = "VM name => IP address."
-  type        = map(string)
+  description = "VM name => { ip, ipv6, secondary_ip, macs }. macs (primary, secondary) is set for VMs with a second NIC; the NICs are then matched by MAC."
+  type = map(object({
+    ip           = string
+    ipv6         = optional(string)
+    secondary_ip = optional(string)
+    macs         = optional(list(string))
+  }))
 }
 
 variable "ip_prefix_length" {
   type = number
+}
+
+variable "ipv6_prefix_length" {
+  type    = number
+  default = 64
+}
+
+variable "ipv6_gateway" {
+  type    = string
+  default = null
+}
+
+variable "secondary_prefix_length" {
+  type    = number
+  default = 24
 }
 
 variable "gateway" {

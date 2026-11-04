@@ -44,9 +44,12 @@ Then log in with `ssh <vm_username>@<ip>`. `terraform output vms` lists all VMs.
 
 | Variable           | Description                                        | Default                 |
 |--------------------|----------------------------------------------------|-------------------------|
-| `vms`              | Map name → `{ ip, role?, ansible_host?, cpu?, memory_mb?, disk_gb? }` | `kube-cp01..03`, `kube-wl01..03` |
+| `vms`              | Map name → `{ ip, role?, ansible_host?, ipv6?, secondary_ip?, cpu?, memory_mb?, disk_gb? }` | `kube-cp01..03`, `kube-wl01..03` |
 | `ip_prefix_length` | Netmask as prefix length                           | `24`                    |
 | `gateway`          | Default gateway                                    | *(required)*            |
+| `ipv6_prefix_length` | Prefix length of the per-VM `ipv6` addresses     | `64`                    |
+| `ipv6_gateway`     | IPv6 default gateway                               | `null`                  |
+| `secondary_prefix_length` | Prefix length of the second NIC's network   | `24`                    |
 | `dns_servers`      | DNS servers                                        | `["1.1.1.1","8.8.8.8"]` |
 | `dns_domain`       | Search domain                                      | `""`                    |
 | `vm_username`      | User                                               | `ubuntu`                |
@@ -73,6 +76,53 @@ The password can also be passed as an environment variable instead of in the fil
 
 > The password ends up in plain text in the cloud-init data and in the
 > Terraform state. Protect the state file and prefer SSH keys in production.
+
+## Networking: IPv6, a second NIC and VLANs
+
+Each VM can get a static IPv6 address next to its IPv4 address, and a second
+NIC with its own IPv4 address (e.g. a storage or cluster network, without a
+default route):
+
+```hcl
+ipv6_gateway = "2001:db8::1"
+vms = {
+  "kube-cp01" = { ip = "192.168.1.101", role = "control_plane", ipv6 = "2001:db8::101", secondary_ip = "10.10.0.101" }
+  # ...
+}
+```
+
+VMs with a `secondary_ip` get fixed MAC addresses on both NICs (derived from
+the VM name, in VMware's static range `00:50:56:00-3f`), so cloud-init can tell
+the NICs apart. Each platform has its own setting for the second NIC's network,
+and VLANs work as follows:
+
+| Platform | Second NIC network | VLAN |
+|----------|--------------------|------|
+| Proxmox | `secondary_bridge` | `vlan_id` and `secondary_vlan_id` tag the NICs |
+| vCenter | `secondary_network` (port group) | Set on the port group |
+| ESXi | `secondary_network` (port group) | Set on the port group |
+| libvirt | `secondary_network_name` or `secondary_network_bridge` | Use a bridge on a VLAN interface (e.g. `br0.20`) |
+| VirtualBox | `secondary_network_type` + `secondary_network_name` | Not supported by VirtualBox; use a host adapter on the VLAN |
+| Workstation | `secondary_vnet` (e.g. `vmnet2`) | Not supported by Workstation; bridge a vmnet to a host VLAN adapter |
+
+IPv6 and the second NIC are applied by cloud-init on the **first boot**.
+VirtualBox and Workstation VMs are recreated when they change; on the other
+platforms recreate existing VMs to apply them, e.g.
+`terraform apply -replace='proxmox_virtual_environment_vm.vm["kube-cp01"]'`.
+Kubernetes keeps using the IPv4 address in `ip` (or set `kubernetes_node_ip`
+through `ansible_extra_vars` per your network design).
+
+## Verifying the Ubuntu image
+
+| Platform | Verification |
+|----------|--------------|
+| Proxmox | The node verifies the download. The SHA256 is looked up in the `SHA256SUMS` next to `ubuntu_image_url`, or set `ubuntu_image_sha256`. Turn off with `verify_ubuntu_image = false`. |
+| VirtualBox | The script verifies the OVA after downloading it (against `SHA256SUMS`, or `ubuntu_image_sha256`). A local `ubuntu_ova` is verified when `ubuntu_image_sha256` is set. |
+| libvirt, ESXi | Set `ubuntu_image_sha256` and use a **local** file in `ubuntu_image_url`/`ubuntu_ova`; it is checked at plan time. URLs are downloaded by the provider/ovftool and cannot be verified. |
+| vCenter, Workstation | Verify the OVA before importing the template: `sha256sum -c SHA256SUMS --ignore-missing`. |
+
+`scripts/prepare-offline.sh` downloads and verifies the images for you (see
+[Offline](#offline-air-gapped-deployment)).
 
 ---
 
@@ -266,7 +316,7 @@ ansible_extra_vars              = { kubernetes_observability_enabled = true }
 | `run_ansible`                     | Run the role after the VMs are created                   | `false`       |
 | `ansible_ssh_private_key_file`    | SSH key for Ansible; `null` = use `vm_password` (needs `sshpass`) | `null` |
 | `ansible_role_source`             | Git URL of the role                                      | GitHub repo   |
-| `ansible_role_version`            | Tag, branch or commit of the role                        | `v3.1.1`      |
+| `ansible_role_version`            | Tag, branch or commit of the role                        | `v3.2.0`      |
 | `kubernetes_api_vip`              | Kubernetes API virtual IP (required with `run_ansible`)  | `null`        |
 | `kubernetes_keepalived_auth_pass` | Keepalived password, max 8 characters (required with `run_ansible`) | `null` |
 | `ansible_extra_vars`              | Extra role variables                                     | `{}`          |
@@ -288,6 +338,69 @@ ANSIBLE_ROLES_PATH=roles ansible-playbook -i inventory.yml ../../ansible/site.ym
 
 > The inventory contains `vm_password` (when no SSH key is set) and the
 > Keepalived password. It is written with mode `0600` and ignored by git.
+
+### kubeconfig
+
+After the playbook has run, Terraform fetches the admin kubeconfig from the
+first controller (its server is the API virtual IP):
+
+```bash
+export KUBECONFIG=$(terraform output -raw kubeconfig)
+kubectl get nodes
+```
+
+### Add-ons: ingress, cert-manager, Argo CD
+
+ansible-role-kubernetes (v3.2.0+) can install Traefik as ingress controller,
+cert-manager and Argo CD (see its
+[add-on guide](https://github.com/636B65/ansible-role-kubernetes/blob/main/docs/addons.md)).
+Turn them on through `ansible_extra_vars`:
+
+```hcl
+ansible_extra_vars = {
+  kubernetes_ingress_enabled      = true # Traefik, NodePort 30080/30444
+  kubernetes_cert_manager_enabled = true # with a "selfsigned" ClusterIssuer
+  kubernetes_argocd_enabled       = true
+}
+```
+
+They are part of the offline bundle when they are enabled while staging.
+
+### Add and remove nodes
+
+- **Add:** add a VM to `vms` and apply. Terraform creates it, the inventory
+  changes, and the playbook runs again and joins the new node.
+- **Remove:** in two applies, so the node leaves the cluster cleanly before
+  its VM is deleted:
+  1. `remove_nodes = ["kube-wl03"]` and apply: the role drains the node, moves
+     Longhorn replicas away and removes it from Kubernetes (see its
+     [scaling guide](https://github.com/636B65/ansible-role-kubernetes/blob/main/docs/scaling.md)).
+     The VM keeps running.
+  2. Remove the VM from `vms` and from `remove_nodes`, and apply: the VM is
+     deleted and the playbook updates the remaining nodes.
+
+### Upgrade Kubernetes
+
+Set `kubernetes_upgrade = true`. Whenever `ansible_role_version` (which pins
+the Kubernetes version) or `ansible_extra_vars` (e.g. `kubernetes_version`)
+change, Terraform runs the role's rolling upgrade, one node at a time (see its
+[upgrade guide](https://github.com/636B65/ansible-role-kubernetes/blob/main/docs/upgrade.md)).
+
+### etcd backups
+
+The role takes a daily etcd snapshot on every controller. Fetch the newest
+snapshot and configuration archive of each controller to `etcd_backup_dir`
+(default `.ansible/etcd-backups`) with:
+
+```bash
+eval "$(terraform output -raw etcd_backup_command)"
+```
+
+| Variable             | Description                                                    | Default |
+|----------------------|----------------------------------------------------------------|---------|
+| `remove_nodes`       | VMs to drain and remove from the cluster (VMs stay)            | `[]`    |
+| `kubernetes_upgrade` | Run the rolling upgrade when the role version or extra vars change | `false` |
+| `etcd_backup_dir`    | Where `etcd_backup_command` saves the backups                  | `null`  |
 
 ---
 
@@ -323,7 +436,17 @@ destroyed afterwards.
 
 ### 2. Prepare the offline side
 
-Everything Terraform and Ansible would download must be available locally:
+Everything Terraform and Ansible would download must be available locally.
+`scripts/prepare-offline.sh` collects it on a connected machine into one
+directory (providers mirror, Ansible wheels, the role at its pinned version,
+and the Ubuntu image and OVA verified against `SHA256SUMS`) and writes a
+`README.txt` with the settings to use offline:
+
+```bash
+scripts/prepare-offline.sh -o offline-kit -p proxmox,libvirt -a linux_amd64 -t
+```
+
+Run it with `-h` for the options. Or do it by hand:
 
 | What | How |
 |------|-----|
@@ -379,6 +502,12 @@ modules/cloud-init/   shared cloud-init (user, password, SSH, network)
 modules/ansible/      Ansible inventory, optional run of ansible-role-kubernetes and offline bundle staging
 ansible/site.yml      playbook that unpacks an offline bundle and runs ansible-role-kubernetes
 ansible/fetch-offline-bundle.yml  packs and fetches a staged offline bundle
+ansible/fetch-kubeconfig.yml      fetches the admin kubeconfig
+ansible/remove-node.yml           drains and removes nodes (remove_nodes)
+ansible/upgrade.yml               rolling Kubernetes upgrade (kubernetes_upgrade)
+ansible/fetch-etcd-backup.yml     fetches the newest etcd backups
+scripts/prepare-offline.sh        collects everything for an offline install
+scripts/check-common-variables.sh checks that the common variables match
 proxmox/              Proxmox VE
 vcenter/              vCenter
 esxi/                 standalone ESXi
@@ -390,6 +519,32 @@ virtualbox/           VirtualBox (+ scripts/)
 Each platform directory has the same `variables.tf` (common variables at the
 top, platform-specific ones at the bottom), `common.tf`, `ansible.tf`, `main.tf`, `outputs.tf`,
 `versions.tf` and `terraform.tfvars.example`.
+
+## Development
+
+CI (`.github/workflows/release.yml`) runs on every push and pull request:
+
+- `terraform fmt`, `init` and `validate` for every platform,
+- `terraform test` for `modules/cloud-init` (rendered cloud-init, networking,
+  offline) and `modules/ansible` (inventory, guards; mocked provider),
+- pre-commit with tflint, shellcheck, YAML checks and
+  `scripts/check-common-variables.sh`, plus a Trivy misconfiguration scan,
+- a syntax check of every playbook in `ansible/` against the pinned role.
+
+Run the same checks locally:
+
+```bash
+pip install pre-commit && pre-commit install   # needs terraform and tflint
+pre-commit run --all-files
+(cd modules/cloud-init && terraform init && terraform test)
+(cd modules/ansible && terraform init && terraform test)
+```
+
+Provider versions are pinned by the committed `.terraform.lock.hcl` in every
+platform directory (with checksums for Linux, macOS and Windows). Dependabot
+proposes provider and GitHub Actions updates; after changing a version
+constraint by hand, run the *Update provider lock files* workflow
+(`.github/workflows/providers-lock.yml`) on your branch.
 
 ## Versioning and releases
 
@@ -403,7 +558,7 @@ To make a new release:
 2. Add a `## [x.y.z] - YYYY-MM-DD` section to `CHANGELOG.md`.
 3. Push/merge to `main`.
 
-The `.github/workflows/release.yml` workflow runs `terraform fmt`/`validate` for
+The `.github/workflows/release.yml` workflow runs the checks above for
 all platforms and then creates the tag `vx.y.z` and a GitHub release with the
 section from `CHANGELOG.md`. If the tag already exists, no new release is
 created. Only versions with a pre-release suffix (e.g. `1.2.0-rc.1`) are marked

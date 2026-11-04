@@ -6,6 +6,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-04
+
+### Added
+- The admin kubeconfig is fetched after `run_ansible` (`kubeconfig` output).
+- Cluster operations with ansible-role-kubernetes:
+  - `remove_nodes` drains and removes nodes from the cluster before their VMs
+    are deleted; adding a VM to `vms` joins a new node.
+  - `kubernetes_upgrade` runs the rolling upgrade when the role version or
+    `ansible_extra_vars` change.
+  - `etcd_backup_command` output fetches the newest etcd backups.
+- Networking: per-VM `ipv6` (with `ipv6_prefix_length`, `ipv6_gateway`) and
+  `secondary_ip` for a second NIC on every platform, with fixed MAC addresses
+  so the guest can tell the NICs apart. Proxmox gets `secondary_vlan_id`.
+- Ubuntu image verification: Proxmox verifies the download against
+  `SHA256SUMS` (or `ubuntu_image_sha256`), VirtualBox verifies the OVA, and
+  libvirt and ESXi check a local file against `ubuntu_image_sha256`.
+- `scripts/prepare-offline.sh` collects the providers, Ansible, the role and
+  the verified Ubuntu images for an offline install.
+- `terraform test` for `modules/cloud-init` and `modules/ansible`, tflint,
+  Trivy, shellcheck and a check that the common variables match, run by CI
+  and by the new pre-commit configuration.
+- Committed provider lock files, a workflow that regenerates them, and
+  Dependabot updates for the Terraform providers.
+
+### Changed
+- Default `ansible_role_version` is `v3.2.0`, which adds optional Traefik,
+  cert-manager and Argo CD (enable them with `ansible_extra_vars`).
+- Proxmox needs the `hashicorp/http` provider (for `SHA256SUMS`). With
+  verification on, the image download gets a checksum, which replaces the
+  downloaded image once on existing deployments (the VMs are not affected).
+
 ## [0.6.1] - 2026-11-04
 
 ### Changed

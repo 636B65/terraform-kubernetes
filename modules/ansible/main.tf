@@ -55,9 +55,18 @@ locals {
     }]
   })
 
-  playbook       = abspath("${path.module}/../../ansible/site.yml")
-  fetch_playbook = abspath("${path.module}/../../ansible/fetch-offline-bundle.yml")
+  playbooks = {
+    for name in ["site", "fetch-offline-bundle", "fetch-kubeconfig", "remove-node", "upgrade", "fetch-etcd-backup"] :
+    name => abspath("${path.module}/../../ansible/${name}.yml")
+  }
+  playbook       = local.playbooks["site"]
+  fetch_playbook = local.playbooks["fetch-offline-bundle"]
   out            = abspath(var.output_dir)
+  kubeconfig     = "${local.out}/kubeconfig"
+  playbook_args  = join(" ", [for a in var.playbook_args : format("%q", a)])
+
+  # Dry runs install no cluster, so there is no kubeconfig to fetch.
+  dry_run = length(setintersection(var.playbook_args, ["--check", "-C", "--syntax-check", "--list-hosts", "--list-tasks", "--list-tags"])) > 0
 
   ansible_env = {
     ANSIBLE_ROLES_PATH        = "${local.out}/roles"
@@ -93,7 +102,10 @@ resource "terraform_data" "playbook" {
     command     = <<-EOT
       set -e
       ansible-galaxy role install --force -r requirements.yml -p roles
-      ansible-playbook -i inventory.yml ${join(" ", [for a in var.playbook_args : format("%q", a)])} '${local.playbook}'
+      ansible-playbook -i inventory.yml ${local.playbook_args} '${local.playbook}'
+      %{if !local.dry_run~}
+      ansible-playbook -i inventory.yml -e kubeconfig='${local.kubeconfig}' '${local.playbooks["fetch-kubeconfig"]}'
+      %{endif~}
     EOT
 
     environment = local.ansible_env
@@ -112,6 +124,61 @@ resource "terraform_data" "playbook" {
   }
 
   depends_on = [local_sensitive_file.inventory, local_file.requirements]
+}
+
+# Drains and removes nodes from the cluster (the VMs stay until they are
+# removed from vms). Runs again when the list changes.
+resource "terraform_data" "remove_nodes" {
+  count = length(var.remove_nodes) > 0 ? 1 : 0
+
+  triggers_replace = [sort(var.remove_nodes)]
+
+  provisioner "local-exec" {
+    working_dir = local.out
+    command     = "ansible-playbook -i inventory.yml -e ${format("%q", jsonencode({ kubernetes_remove_nodes = var.remove_nodes }))} '${local.playbooks["remove-node"]}'"
+    environment = local.ansible_env
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.run
+      error_message = "remove_nodes requires run_ansible = true."
+    }
+
+    precondition {
+      condition     = length(setsubtract(var.remove_nodes, keys(var.vms))) == 0
+      error_message = "Every name in remove_nodes must be a VM in vms. Remove a node from the cluster first, and from vms in a later apply."
+    }
+  }
+
+  depends_on = [terraform_data.playbook]
+}
+
+# Rolling upgrade to the Kubernetes version pinned by the role (or set in
+# ansible_extra_vars). Runs when upgrades are enabled and the role version or
+# the extra variables change.
+resource "terraform_data" "upgrade" {
+  count = var.upgrade ? 1 : 0
+
+  triggers_replace = [
+    sha256(local.requirements),
+    sha256(jsonencode(var.extra_vars)),
+  ]
+
+  provisioner "local-exec" {
+    working_dir = local.out
+    command     = "ansible-playbook -i inventory.yml '${local.playbooks["upgrade"]}'"
+    environment = local.ansible_env
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.run
+      error_message = "kubernetes_upgrade requires run_ansible = true."
+    }
+  }
+
+  depends_on = [terraform_data.playbook]
 }
 
 # Stages an offline bundle on the (online) cluster and fetches it from the

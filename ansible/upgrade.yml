@@ -1,0 +1,17 @@
+---
+# Upgrades the cluster to the kubernetes_version pinned by the role (or set in
+# ansible_extra_vars), one node at a time, with the upgrade tasks of
+# ansible-role-kubernetes (see its docs/upgrade.md).
+
+- name: Upgrade Kubernetes one node at a time
+  hosts: k8s_control_plane:k8s_workers
+  become: true
+  any_errors_fatal: true
+  gather_facts: true
+  serial: 1
+  order: inventory
+  tasks:
+    - name: Upgrade this node
+      ansible.builtin.import_role:
+        name: ansible-role-kubernetes
+        tasks_from: upgrade
