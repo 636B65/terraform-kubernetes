@@ -4,6 +4,11 @@
 # --- VMware Workstation -------------------------------------------------------
 template_vmx = "C:/VMs/templates/ubuntu-2604-template/ubuntu-2604-template.vmx"
 vm_directory = "C:/VMs"
+# Create template_vmx from the OVA with ovftool if it does not exist yet
+# (e.g. from the offline kit), connected to template_network:
+# ubuntu_ova          = "C:/offline-kit/images/ubuntu-26.04-server-cloudimg-amd64.ova"
+# ubuntu_image_sha256 = "..." # from images/SHA256SUMS
+# template_network    = "nat" # nat, bridged, hostonly or vmnetN
 # vmrun_path        = "C:/Program Files (x86)/VMware/VMware Workstation/vmrun.exe"
 # vdiskmanager_path = "C:/Program Files (x86)/VMware/VMware Workstation/vmware-vdiskmanager.exe"
 start_gui = false

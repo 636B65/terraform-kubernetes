@@ -1,8 +1,8 @@
 # Creates/deletes a VM in VMware Workstation (Windows host). Called by Terraform.
-# Usage: vm.ps1 create|destroy  (parameters via environment variables)
+# Usage: vm.ps1 template|create|destroy  (parameters via environment variables)
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('create', 'destroy')]
+    [ValidateSet('template', 'create', 'destroy')]
     [string]$Action
 )
 
@@ -29,6 +29,27 @@ function Set-Vmx {
 }
 
 switch ($Action) {
+    'template' {
+        $template = $env:TEMPLATE_VMX
+        if (Test-Path -LiteralPath $template) {
+            Write-Host "Template $template exists, keeping it."
+            exit 0
+        }
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $template) | Out-Null
+        Write-Host "Creating the template $template from $env:OVA"
+        Invoke-Tool $env:OVFTOOL @('--acceptAllEulas', '--allowExtraConfig', $env:OVA, $template)
+
+        Write-Host "Connecting the template to $env:TEMPLATE_NETWORK"
+        Set-Vmx 'ethernet0.present' 'TRUE'
+        Set-Vmx 'ethernet0.startConnected' 'TRUE'
+        if ($env:TEMPLATE_NETWORK -like 'vmnet*') {
+            Set-Vmx 'ethernet0.connectionType' 'custom'
+            Set-Vmx 'ethernet0.vnet' $env:TEMPLATE_NETWORK
+        } else {
+            Set-Vmx 'ethernet0.connectionType' $env:TEMPLATE_NETWORK
+        }
+    }
+
     'create' {
         if (Test-Path -LiteralPath $vmx) { throw "$vmx already exists." }
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $vmx) | Out-Null

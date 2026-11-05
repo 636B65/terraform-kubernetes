@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `UPGRADING.md`: what each version changes for existing deployments, based
   on the rendered cloud-init of every release (VirtualBox and Workstation VMs
   are replaced when upgrading across 0.2.0, 0.3.3 and 0.6.0).
+- `scripts/prepare-offline.sh` builds the Kubernetes bundle
+  (`kubernetes-offline.tar`) without a cluster, with the role's
+  `offline_build` in an Ubuntu 26.04 container (docker or podman); `-e` passes
+  the add-on switches for the build, `-K` skips it. One command now collects
+  everything for an offline deployment. The Ubuntu image is chosen from the
+  platforms (`-i auto`: `.img` for Proxmox/libvirt, OVA otherwise).
+- Workstation: `ubuntu_ova` (with `ubuntu_image_sha256` and
+  `template_network`) creates `template_vmx` with ovftool when it does not
+  exist yet.
+- libvirt README: the AppArmor `Permission denied` fix
+  (`security_driver = "none"`), found by the E2E test.
 - `velero` variable for the Velero backup add-on of ansible-role-kubernetes
   (v3.3.0+): backups of all namespaces and volume data to S3/MinIO. Off by
   default.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Creates/deletes a VM in VMware Workstation (Linux host). Called by Terraform.
-# Usage: vm.sh create|destroy  (parameters via environment variables)
+# Usage: vm.sh template|create|destroy  (parameters via environment variables)
 set -euo pipefail
 
 action="${1:?create or destroy}"
@@ -16,6 +16,28 @@ set_vmx() { # set_vmx <key> <value>
 }
 
 case "$action" in
+  template)
+    : "${OVFTOOL:?}" "${OVA:?}" "${TEMPLATE_VMX:?}" "${TEMPLATE_NETWORK:?}"
+    if [[ -e "$TEMPLATE_VMX" ]]; then
+      echo "Template $TEMPLATE_VMX exists, keeping it."
+      exit 0
+    fi
+    mkdir -p "$(dirname "$TEMPLATE_VMX")"
+    echo "Creating the template $TEMPLATE_VMX from $OVA"
+    "$OVFTOOL" --acceptAllEulas --allowExtraConfig "$OVA" "$TEMPLATE_VMX"
+
+    echo "Connecting the template to $TEMPLATE_NETWORK"
+    set_vmx ethernet0.present "TRUE"
+    set_vmx ethernet0.startConnected "TRUE"
+    case "$TEMPLATE_NETWORK" in
+      vmnet*)
+        set_vmx ethernet0.connectionType "custom"
+        set_vmx ethernet0.vnet "$TEMPLATE_NETWORK"
+        ;;
+      *) set_vmx ethernet0.connectionType "$TEMPLATE_NETWORK" ;;
+    esac
+    ;;
+
   create)
     : "${VDISKMANAGER:?}" "${TEMPLATE_VMX:?}" "${VM_NAME:?}" "${CPU:?}" "${MEMORY_MB:?}" "${DISK_GB:?}"
     : "${METADATA_B64:?}" "${USERDATA_B64:?}"

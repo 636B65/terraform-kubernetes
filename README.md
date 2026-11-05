@@ -180,7 +180,13 @@ file, expands the disk with `vmware-vdiskmanager` and starts the VM.
 `terraform destroy` stops and deletes the VMs. The host OS is auto-detected
 (`host_os` can be set explicitly).
 
-Create the template once with `ovftool` (bundled with Workstation):
+Terraform can create the template itself: set `ubuntu_ova` to the local OVA
+(e.g. from the offline kit) and, if needed, `template_network` (`nat` by
+default, `bridged`, `hostonly` or a custom `vmnetN`). When `template_vmx` does
+not exist yet, `ovftool` imports the OVA there and connects it to that network;
+it is never powered on, and `terraform destroy` keeps it.
+
+Or create the template once by hand with `ovftool` (bundled with Workstation):
 
 ```powershell
 # Windows
@@ -427,19 +433,57 @@ eval "$(terraform output -raw etcd_backup_command)"
 ## Offline (air-gapped) deployment
 
 ansible-role-kubernetes can install a cluster without internet access from a
-bundle of packages and container images staged on a cluster that has it (see
-its [offline guide](https://github.com/636B65/ansible-role-kubernetes/blob/main/docs/offline.md)).
-These templates cover both halves: staging the bundle on an online cluster and
-installing from it on an offline one.
+bundle of packages, container images, charts and manifests (see its
+[offline guide](https://github.com/636B65/ansible-role-kubernetes/blob/main/docs/offline.md)).
+These templates build that bundle, together with everything else the offline
+side needs, and install from it.
 
 > The offline flow has not been verified end to end on an air-gapped network
 > yet, in these templates or in the role. Test it in a lab first.
 
-### 1. Stage a bundle (online)
+### 1. Build the offline kit (online, no cluster needed)
 
-Deploy a cluster that has internet access, with the **same Ubuntu release,
-CPU architecture and role version** as the offline cluster, and let Terraform
-stage and fetch the bundle:
+On a Linux machine with internet access, docker or podman, Terraform, git and
+Python, one command collects everything for the platforms you use:
+
+```bash
+scripts/prepare-offline.sh -o offline-kit -p workstation -t
+```
+
+The kit holds:
+
+- the Terraform providers of the chosen platforms (a filesystem mirror and a
+  `terraformrc`; `-a` adds targets such as `windows_amd64` for a Windows
+  Workstation host),
+- Ansible as Python wheels, and ansible-role-kubernetes at the pinned version,
+- the Ubuntu 26.04 image the platforms need, verified against `SHA256SUMS`:
+  the `.img` for Proxmox and libvirt, the OVA for vCenter, ESXi, Workstation
+  and VirtualBox (`-i` overrides),
+- `kubernetes-offline.tar`: the Kubernetes packages with their dependencies,
+  the container images, the Cilium chart and CLI, Helm and the add-on charts
+  and manifests, built by the role's `offline_build` tasks (role v3.4.0+) in
+  an Ubuntu 26.04 container. No cluster is deployed.
+
+Add-ons are off by default and only in the bundle when they are turned on for
+the build. Pass the same switches as the offline cluster will use in a YAML
+file with `-e`:
+
+```yaml
+# bundle-vars.yml
+kubernetes_ingress_enabled: true
+kubernetes_velero_enabled: true # with velero = { enabled = true, ... } offline
+```
+
+```bash
+scripts/prepare-offline.sh -o offline-kit -p workstation -e bundle-vars.yml -t
+```
+
+The kit's `README.txt` lists the settings to use offline. Run the script with
+`-h` for all options; `-K` skips the Kubernetes bundle.
+
+**Alternative: stage on an online cluster.** Deploy a cluster that has
+internet access, with the same Ubuntu release, CPU architecture and role
+version as the offline cluster, and let Terraform stage and fetch the bundle:
 
 ```hcl
 run_ansible          = true
@@ -447,40 +491,34 @@ stage_offline_bundle = true
 offline_bundle       = "~/kubernetes-offline.tar" # written here
 ```
 
-After the normal install, Terraform runs the role with `--tags offline_stage`
-(every node saves its packages and images to `/opt/kubernetes-offline`), then
-[`ansible/fetch-offline-bundle.yml`](ansible/fetch-offline-bundle.yml) packs
-the bundle on the first controller (which also has the Cilium assets) and
-fetches it to `offline_bundle`. Expect several GB. The staging cluster can be
-destroyed afterwards.
+After the normal install, Terraform runs the role with `--tags offline_stage`,
+then [`ansible/fetch-offline-bundle.yml`](ansible/fetch-offline-bundle.yml)
+packs the bundle on the first controller and fetches it to `offline_bundle`.
+Expect several GB. The staging cluster can be destroyed afterwards.
 
 ### 2. Prepare the offline side
 
-Everything Terraform and Ansible would download must be available locally.
-`scripts/prepare-offline.sh` collects it on a connected machine into one
-directory (providers mirror, Ansible wheels, the role at its pinned version,
-and the Ubuntu image and OVA verified against `SHA256SUMS`) and writes a
-`README.txt` with the settings to use offline:
+Copy the kit to the machine that runs Terraform on the offline network and
+follow its `README.txt`: point `TF_CLI_CONFIG_FILE` at its `terraformrc`,
+install Ansible from its wheels, and set `ansible_role_source`, the image
+(`ubuntu_ova`, `ubuntu_image_url`, ...) and `offline_bundle` to the files in
+the kit. On Workstation, `ubuntu_ova` lets Terraform create the template.
 
-```bash
-scripts/prepare-offline.sh -o offline-kit -p proxmox,libvirt -a linux_amd64 -t
-```
-
-Run it with `-h` for the options. Or do it by hand:
+Or do it by hand:
 
 | What | How |
 |------|-----|
 | Terraform providers | On a connected machine: `terraform providers mirror /path/to/mirror` in each platform directory you use. Offline, point the CLI at it in `~/.terraformrc`: `provider_installation { filesystem_mirror { path = "/path/to/mirror" } }`. |
 | Ansible | `pip download ansible-core` on a connected machine, `pip install --no-index --find-links ...` offline. |
 | The role | Clone ansible-role-kubernetes to the Terraform machine and set `ansible_role_source = "/path/to/ansible-role-kubernetes"` (a local git repository; `ansible_role_version` must be a tag or branch in it). |
-| Ubuntu image | Copy the cloud image or OVA. libvirt (`ubuntu_image_url`), VirtualBox and ESXi (`ubuntu_ova`) take a local path. Proxmox: upload the `.img` to the node and set `ubuntu_image_file_id` (e.g. `local:iso/ubuntu-26.04-server-cloudimg-amd64.img`), or point `ubuntu_image_url` at an internal web server. vCenter and Workstation use the template you import. |
+| Ubuntu image | Copy the cloud image or OVA. libvirt (`ubuntu_image_url`), VirtualBox, ESXi and Workstation (`ubuntu_ova`) take a local path. Proxmox: upload the `.img` to the node and set `ubuntu_image_file_id` (e.g. `local:iso/ubuntu-26.04-server-cloudimg-amd64.img`), or point `ubuntu_image_url` at an internal web server. vCenter uses the template you import. |
 | DNS and time | Set `dns_servers` and `ntp_servers` to internal servers. The role needs synchronized clocks. |
 
 ### 3. Install offline
 
 ```hcl
 offline        = true
-offline_bundle = "~/kubernetes-offline.tar" # from step 1
+offline_bundle = "/path/to/offline-kit/kubernetes-offline.tar" # from step 1
 run_ansible    = true
 ntp_servers    = ["10.0.0.5"]
 dns_servers    = ["10.0.0.53"]

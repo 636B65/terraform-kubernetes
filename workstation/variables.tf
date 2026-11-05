@@ -304,8 +304,42 @@ variable "etcd_backup_dir" {
 # ---------------------------------------------------------------------------
 
 variable "template_vmx" {
-  description = "Path to the .vmx of the Ubuntu 26.04 template (imported from the cloud image OVA, see README). The template must NEVER have been powered on."
+  description = "Path to the .vmx of the Ubuntu 26.04 template (imported from the cloud image OVA, see README). The template must NEVER have been powered on. Created from ubuntu_ova when that is set and the file does not exist yet."
   type        = string
+}
+
+variable "ubuntu_ova" {
+  description = "Local Ubuntu 26.04 cloud image OVA (e.g. from the offline kit) to create template_vmx from with ovftool when it does not exist yet. null = template_vmx must exist."
+  type        = string
+  default     = null
+}
+
+variable "ubuntu_image_sha256" {
+  description = "Expected SHA256 of ubuntu_ova, checked at plan time. null = not verified."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.ubuntu_image_sha256 == null || can(regex("^[0-9a-fA-F]{64}$", coalesce(var.ubuntu_image_sha256, "x")))
+    error_message = "ubuntu_image_sha256 must be 64 hexadecimal characters."
+  }
+}
+
+variable "template_network" {
+  description = "Network of the template created from ubuntu_ova (and so of the VMs): nat, bridged, hostonly or a custom vmnet such as vmnet2."
+  type        = string
+  default     = "nat"
+
+  validation {
+    condition     = can(regex("^(nat|bridged|hostonly|vmnet[0-9]+)$", var.template_network))
+    error_message = "template_network must be nat, bridged, hostonly or vmnetN."
+  }
+}
+
+variable "ovftool_path" {
+  description = "Path to ovftool (bundled with Workstation). null = default path for the OS."
+  type        = string
+  default     = null
 }
 
 variable "vm_directory" {

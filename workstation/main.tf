@@ -9,6 +9,7 @@ locals {
 
   vmrun        = coalesce(var.vmrun_path, local.is_windows ? "${local.ws_dir}/vmrun.exe" : "/usr/bin/vmrun")
   vdiskmanager = coalesce(var.vdiskmanager_path, local.is_windows ? "${local.ws_dir}/vmware-vdiskmanager.exe" : "/usr/bin/vmware-vdiskmanager")
+  ovftool      = coalesce(var.ovftool_path, local.is_windows ? "${local.ws_dir}/OVFTool/ovftool.exe" : "/usr/bin/ovftool")
 
   script = (local.is_windows
     ? ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${abspath(path.module)}/scripts/vm.ps1"]
@@ -16,8 +17,43 @@ locals {
   )
 }
 
+# Creates the template from the OVA once, when ubuntu_ova is set and the
+# template does not exist yet. It is never powered on, and destroy keeps it.
+resource "terraform_data" "template" {
+  count = var.ubuntu_ova == null ? 0 : 1
+
+  triggers_replace = {
+    template = var.template_vmx
+    ova      = var.ubuntu_ova
+    network  = var.template_network
+  }
+
+  provisioner "local-exec" {
+    interpreter = local.script
+    command     = "template"
+
+    environment = {
+      OVFTOOL          = local.ovftool
+      OVA              = var.ubuntu_ova
+      TEMPLATE_VMX     = var.template_vmx
+      TEMPLATE_NETWORK = var.template_network
+      VM_VMX           = var.template_vmx
+      VMRUN            = local.vmrun
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.ubuntu_image_sha256 == null || filesha256(var.ubuntu_ova) == lower(coalesce(var.ubuntu_image_sha256, "x"))
+      error_message = "${var.ubuntu_ova} does not match ubuntu_image_sha256."
+    }
+  }
+}
+
 resource "terraform_data" "vm" {
   for_each = local.vms
+
+  depends_on = [terraform_data.template]
 
   # Changed values replace the VM (destroy + create).
   triggers_replace = {
