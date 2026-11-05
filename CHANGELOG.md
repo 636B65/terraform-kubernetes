@@ -28,9 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   Terraform binaries for every `-a` target, Ansible on a portable CPython
   (python-build-standalone) instead of wheels for the build machine's
   Python, and git, sshpass, xorriso and the OpenSSH client as local apt/dnf
-  repositories per release (`-d`). `install.ps1` sets up Terraform on
-  Windows (Ansible does not run there). A weekly CI job installs a kit
-  without network access on nine distribution images and on Windows.
+  repositories for the current releases (Debian 13, Ubuntu 26.04,
+  RHEL/Rocky/AlmaLinux 10, Fedora; `-d` changes the list). `install.ps1`
+  sets up Terraform on Windows (Ansible does not run there). A weekly CI job
+  installs a kit without network access on Debian 13, Ubuntu 26.04,
+  AlmaLinux 10, Rocky Linux 10, RHEL 10 (UBI) and Fedora, and on Windows.
 - Workstation: `ubuntu_ova` (with `ubuntu_image_sha256` and
   `template_network`) creates `template_vmx` with ovftool when it does not
   exist yet.

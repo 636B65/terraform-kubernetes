@@ -29,10 +29,9 @@
 #                 Ansible is included for the linux_* targets.
 #   -d RELEASES   Container images of the distributions the offline machine
 #                 may run, for the host packages, comma separated, or none
-#                 (default: debian:12,debian:13,ubuntu:22.04,ubuntu:24.04,
-#                 ubuntu:26.04,almalinux:9,almalinux:10,fedora:latest).
-#                 AlmaLinux packages serve RHEL and Rocky Linux of the same
-#                 major release. amd64 only.
+#                 (default: the current releases debian:13,ubuntu:26.04,
+#                 almalinux:10,fedora:latest). The AlmaLinux 10 packages
+#                 serve RHEL 10 and Rocky Linux 10 as well. amd64 only.
 #   -i IMAGES     Ubuntu images: auto, img, ova, both or none (default: auto =
 #                 .img for proxmox/libvirt, OVA for the VMware platforms and
 #                 VirtualBox)
@@ -62,7 +61,7 @@ pack=0
 bundle=1
 var_files=()
 build_image="${BUILD_IMAGE:-ubuntu:26.04}"
-releases="debian:12,debian:13,ubuntu:22.04,ubuntu:24.04,ubuntu:26.04,almalinux:9,almalinux:10,fedora:latest"
+releases="debian:13,ubuntu:26.04,almalinux:10,fedora:latest"
 python_tag="${PYTHON_STANDALONE_TAG:-20261020}"
 python_version="${PYTHON_VERSION:-3.13}"
 python_base="https://github.com/astral-sh/python-build-standalone/releases/download/$python_tag"

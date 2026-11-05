@@ -3,7 +3,7 @@ name: Offline kit
 # Builds the offline kit with scripts/prepare-offline.sh (without the
 # Kubernetes bundle and the Ubuntu images, which the role's workflow and the
 # release checks cover) and installs it without network access on every
-# supported Linux distribution and on Windows (Terraform only): the tools
+# supported Linux distribution (the current releases) and on Windows (Terraform only): the tools
 # must run and terraform init must find the providers in the mirror.
 
 on:
@@ -56,14 +56,11 @@ jobs:
       fail-fast: false
       matrix:
         image:
-          - debian:12
           - debian:13
-          - ubuntu:22.04
-          - ubuntu:24.04
           - ubuntu:26.04
-          - almalinux:9
           - almalinux:10
-          - rockylinux/rockylinux:9
+          - rockylinux/rockylinux:10
+          - registry.access.redhat.com/ubi10/ubi
           - fedora:latest
     steps:
       - uses: actions/checkout@v7

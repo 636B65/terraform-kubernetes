@@ -461,9 +461,10 @@ The kit holds:
   so it does not depend on the distribution's Python, and
   ansible-role-kubernetes at the pinned version,
 - the host packages the Terraform/Ansible machine needs (git, sshpass,
-  xorriso, OpenSSH client) as local apt/dnf repositories for Debian 12/13,
-  Ubuntu 22.04/24.04/26.04, RHEL/Rocky/AlmaLinux 9/10 and Fedora, built in
-  containers of those releases (`-d` changes the list, `-d none` skips them),
+  xorriso, OpenSSH client) as local apt/dnf repositories for the current
+  releases: Debian 13, Ubuntu 26.04, RHEL/Rocky/AlmaLinux 10 and Fedora,
+  built in containers of those releases (`-d` changes the list, `-d none`
+  skips them),
 - `install.sh` (Linux) and `install.ps1` (Windows, Terraform only) to install
   it all offline,
 - the Ubuntu 26.04 image the platforms need, verified against `SHA256SUMS`:
