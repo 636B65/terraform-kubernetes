@@ -561,6 +561,10 @@ constraint by hand, run the *Update provider lock files* workflow
 The project follows [semver](https://semver.org/). The current version is in
 `VERSION` and the changes are in `CHANGELOG.md`.
 
+To upgrade an existing deployment, follow [UPGRADING.md](UPGRADING.md): it
+says which versions replace VMs on which platform. Always read
+`terraform plan` before `apply`.
+
 To make a new release:
 
 1. Bump the version in `VERSION`: MAJOR for incompatible changes (e.g. renamed
