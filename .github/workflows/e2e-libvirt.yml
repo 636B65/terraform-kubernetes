@@ -101,15 +101,9 @@ jobs:
 
       - name: Collect diagnostics
         if: failure()
-        run: |
-          virsh --connect qemu:///system list --all || true
-          for ip in 192.168.123.11 192.168.123.21; do
-            echo "===== $ip"
-            ssh -i ~/.ssh/e2e -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 "ubuntu@$ip" \
-              'cloud-init status --long; ip -br addr; sudo journalctl -u kubelet --no-pager | tail -n 50; sudo crictl ps -a 2>/dev/null | head -n 30' || true
-          done
+        run: bash tests/e2e/diagnostics.sh kube-cp01=192.168.123.11 kube-wl01=192.168.123.21
 
       - name: terraform destroy
         if: always()
         working-directory: libvirt
-        run: terraform destroy -auto-approve -input=false || true
+        run: terraform destroy -auto-approve -input=false -no-color 2>&1 | tail -n 5 || true
