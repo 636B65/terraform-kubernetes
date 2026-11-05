@@ -175,7 +175,7 @@ variable "ansible_role_source" {
 variable "ansible_role_version" {
   description = "Tag, branch or commit of ansible-role-kubernetes to use. Kept up to date by the track-ansible-role workflow."
   type        = string
-  default     = "v3.2.0"
+  default     = "v3.4.0"
 }
 
 variable "kubernetes_api_vip" {

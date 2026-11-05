@@ -45,7 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   outputs) are generated from `shared/` by `scripts/sync-common.sh`, instead of
   being kept in sync by hand; `--check` runs in pre-commit and CI. Resources
   and the rendered cloud-init are unchanged.
-- Default `ansible_role_version` is `v3.3.0` (Velero add-on, Renovate).
+- Default `ansible_role_version` is `v3.4.0` (Velero add-on, offline bundle
+  without a cluster, Renovate).
 
 ## [0.7.0] - 2026-11-04
 

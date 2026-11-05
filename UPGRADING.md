@@ -36,7 +36,16 @@ apply, and run the playbook on the new VMs.
 
 ## 0.7.x → 0.8.0
 
-- No change to resources or rendered cloud-init.
+- No change to the rendered cloud-init.
+- Default `ansible_role_version` `v3.4.0`: with `run_ansible = true` the
+  playbook runs again on `apply`. Velero and the other add-ons stay off
+  unless you turn them on (`velero`, `ansible_extra_vars`).
+- Workstation: `terraform_data.template` is only created when you set
+  `ubuntu_ova`, and only creates `template_vmx` if it does not exist yet.
+- Offline kit: the layout changed. Build a new kit with
+  `scripts/prepare-offline.sh` and install it with `install.sh` /
+  `install.ps1` instead of the old manual steps (`python/` wheels and the
+  hand-edited `terraformrc` are gone).
 - Contributors: the common variables, `common.tf` and `ansible.tf` are
   generated from `shared/` (`scripts/sync-common.sh`); edit them there.
 
