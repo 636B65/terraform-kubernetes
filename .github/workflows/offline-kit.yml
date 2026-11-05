@@ -45,6 +45,8 @@ jobs:
           name: offline-kit
           path: ${{ runner.temp }}/kit
           retention-days: 3
+          # The role in the kit is a git repository.
+          include-hidden-files: true
 
   linux:
     needs: build
@@ -85,6 +87,8 @@ jobs:
               git --version
               xorriso -version 2>&1 | head -n 1
               ssh -V
+              # The kit belongs to the runner user, git runs as root here.
+              git config --global --add safe.directory "*"
               cp -r /repo /tmp/repo
               for platform in workstation proxmox; do
                 (cd /tmp/repo/$platform && terraform init -backend=false -input=false -no-color | tail -n 2)
