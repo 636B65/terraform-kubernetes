@@ -1,0 +1,54 @@
+locals {
+  vms = {
+    for name, vm in var.vms : name => {
+      ip           = vm.ip
+      role         = vm.role
+      ansible_host = vm.ansible_host
+      ipv6         = vm.ipv6
+      secondary_ip = vm.secondary_ip
+      # Fixed MAC addresses for VMs with two NICs, so the guest can tell them
+      # apart. Derived from the VM name, in VMware's static range
+      # (00:50:56:00-3f), which every hypervisor accepts.
+      macs = vm.secondary_ip == null ? null : [
+        for nic in [0, 1] : format(
+          "00:50:56:%02x:%s:%s",
+          parseint(substr(md5("${name}-${nic}"), 0, 2), 16) % 64,
+          substr(md5("${name}-${nic}"), 2, 2),
+          substr(md5("${name}-${nic}"), 4, 2),
+        )
+      ]
+      cpu       = coalesce(vm.cpu, var.cpu)
+      memory_mb = coalesce(vm.memory_mb, var.memory_mb)
+      disk_gb   = coalesce(vm.disk_gb, var.disk_gb)
+    }
+  }
+}
+
+module "cloud_init" {
+  source = "../modules/cloud-init"
+
+  vms = {
+    for name, vm in local.vms : name => {
+      ip           = vm.ip
+      ipv6         = vm.ipv6
+      secondary_ip = vm.secondary_ip
+      macs         = vm.macs
+    }
+  }
+  ip_prefix_length        = var.ip_prefix_length
+  ipv6_prefix_length      = var.ipv6_prefix_length
+  ipv6_gateway            = var.ipv6_gateway
+  secondary_prefix_length = var.secondary_prefix_length
+  gateway                 = var.gateway
+  dns_servers             = var.dns_servers
+  dns_domain              = var.dns_domain
+  username                = var.vm_username
+  password                = var.vm_password
+  ssh_public_keys         = var.ssh_public_keys
+  timezone                = var.timezone
+  extra_packages          = concat(local.platform_packages, var.extra_packages)
+  offline                 = var.offline
+  apt_mirror              = var.apt_mirror
+  apt_security_mirror     = var.apt_security_mirror
+  ntp_servers             = var.ntp_servers
+}

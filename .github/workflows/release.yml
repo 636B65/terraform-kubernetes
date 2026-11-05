@@ -106,7 +106,7 @@ jobs:
       - name: tflint --init
         run: tflint --init --config "$GITHUB_WORKSPACE/.tflint.hcl"
 
-      - name: pre-commit (fmt, tflint, shellcheck, common variables, YAML)
+      - name: pre-commit (fmt, tflint, shellcheck, shared files in sync, YAML)
         run: |
           pip install pre-commit
           pre-commit run --all-files --show-diff-on-failure

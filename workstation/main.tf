@@ -1,4 +1,7 @@
 locals {
+  # Packages cloud-init installs on this platform in addition to extra_packages.
+  platform_packages = []
+
   # The home directory starts with "/" on Linux but with a drive letter on Windows.
   is_windows = coalesce(var.host_os, startswith(pathexpand("~"), "/") ? "linux" : "windows") == "windows"
 

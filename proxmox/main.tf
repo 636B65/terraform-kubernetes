@@ -1,8 +1,10 @@
 locals {
+  # Packages cloud-init installs on this platform in addition to extra_packages.
+  platform_packages = ["qemu-guest-agent"]
+
   vm_ids = { for i, name in sort(keys(local.vms)) : name => var.vm_id_start + i }
 }
 
-# The Ubuntu 26.04 cloud image is downloaded once to the node.
 # SHA256SUMS published next to the image, used when ubuntu_image_sha256 is not
 # set, to look up the checksum the node verifies the download against.
 data "http" "ubuntu_sha256sums" {
@@ -32,6 +34,7 @@ locals {
   )
 }
 
+# The Ubuntu 26.04 cloud image is downloaded once to the node.
 resource "proxmox_virtual_environment_download_file" "ubuntu" {
   count = var.ubuntu_image_file_id == null ? 1 : 0
 

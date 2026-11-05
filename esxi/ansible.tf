@@ -1,3 +1,5 @@
+# Generated from shared/ansible.tf.tmpl by scripts/sync-common.sh; edit that file instead.
+
 # Generates .ansible/inventory.yml for ansible-role-kubernetes and, when
 # run_ansible = true, runs the role once the VMs exist.
 module "ansible" {
@@ -24,4 +26,24 @@ module "ansible" {
   etcd_backup_dir      = var.etcd_backup_dir
 
   depends_on = [esxi_guest.vm]
+}
+
+output "ansible_inventory" {
+  description = "Generated Ansible inventory for ansible-role-kubernetes."
+  value       = module.ansible.inventory_file
+}
+
+output "ansible_command" {
+  description = "Command to run ansible-role-kubernetes manually."
+  value       = module.ansible.command
+}
+
+output "kubeconfig" {
+  description = "Admin kubeconfig fetched after run_ansible: export KUBECONFIG=$(terraform output -raw kubeconfig)."
+  value       = module.ansible.kubeconfig
+}
+
+output "etcd_backup_command" {
+  description = "Command that fetches the newest etcd backups from the controllers."
+  value       = module.ansible.etcd_backup_command
 }

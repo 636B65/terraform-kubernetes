@@ -1,3 +1,8 @@
+locals {
+  # Packages cloud-init installs on this platform in addition to extra_packages.
+  platform_packages = []
+}
+
 data "vsphere_datacenter" "dc" {
   name = var.datacenter
 }

@@ -507,7 +507,8 @@ ansible/remove-node.yml           drains and removes nodes (remove_nodes)
 ansible/upgrade.yml               rolling Kubernetes upgrade (kubernetes_upgrade)
 ansible/fetch-etcd-backup.yml     fetches the newest etcd backups
 scripts/prepare-offline.sh        collects everything for an offline install
-scripts/check-common-variables.sh checks that the common variables match
+scripts/sync-common.sh           writes the shared files from shared/ into every platform
+shared/                           the common variables, common.tf and ansible.tf of all platforms
 proxmox/              Proxmox VE
 vcenter/              vCenter
 esxi/                 standalone ESXi
@@ -516,9 +517,17 @@ libvirt/              KVM/QEMU via libvirt
 virtualbox/           VirtualBox (+ scripts/)
 ```
 
-Each platform directory has the same `variables.tf` (common variables at the
-top, platform-specific ones at the bottom), `common.tf`, `ansible.tf`, `main.tf`, `outputs.tf`,
-`versions.tf` and `terraform.tfvars.example`.
+Each platform directory has `variables.tf` (common variables at the top,
+platform-specific ones at the bottom), `common.tf`, `ansible.tf`, `main.tf`,
+`outputs.tf`, `versions.tf` and `terraform.tfvars.example`.
+
+The parts every platform shares are written from `shared/` and must not be
+edited in the platform directories: the common variables (the top of
+`variables.tf`, up to the platform's own banner), `common.tf` and `ansible.tf`
+(with the Ansible outputs). Edit the file in `shared/`, then run
+`scripts/sync-common.sh` and commit the result. CI and pre-commit fail when a
+platform is out of date (`scripts/sync-common.sh --check`). A platform adds
+packages to cloud-init with `local.platform_packages` in its `main.tf`.
 
 ## Development
 
@@ -528,7 +537,7 @@ CI (`.github/workflows/release.yml`) runs on every push and pull request:
 - `terraform test` for `modules/cloud-init` (rendered cloud-init, networking,
   offline) and `modules/ansible` (inventory, guards; mocked provider),
 - pre-commit with tflint, shellcheck, YAML checks and
-  `scripts/check-common-variables.sh`, plus a Trivy misconfiguration scan,
+  `scripts/sync-common.sh --check`, plus a Trivy misconfiguration scan,
 - a syntax check of every playbook in `ansible/` against the pinned role.
 
 Run the same checks locally:

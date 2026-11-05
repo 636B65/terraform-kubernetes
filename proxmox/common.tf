@@ -1,3 +1,5 @@
+# Generated from shared/common.tf.tmpl by scripts/sync-common.sh; edit that file instead.
+
 locals {
   vms = {
     for name, vm in var.vms : name => {
@@ -46,7 +48,7 @@ module "cloud_init" {
   password                = var.vm_password
   ssh_public_keys         = var.ssh_public_keys
   timezone                = var.timezone
-  extra_packages          = concat(["qemu-guest-agent"], var.extra_packages)
+  extra_packages          = concat(local.platform_packages, var.extra_packages)
   offline                 = var.offline
   apt_mirror              = var.apt_mirror
   apt_security_mirror     = var.apt_security_mirror

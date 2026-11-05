@@ -1,4 +1,7 @@
 locals {
+  # Packages cloud-init installs on this platform in addition to extra_packages.
+  platform_packages = []
+
   # Hashing the OVA takes a few seconds, so it is done once, and only when a
   # checksum is set.
   ubuntu_image_verified = (

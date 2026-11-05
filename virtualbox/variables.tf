@@ -1,3 +1,5 @@
+# Generated from shared/variables.common.tf.tmpl by scripts/sync-common.sh; edit that file instead.
+
 # ---------------------------------------------------------------------------
 # Common variables (identical for proxmox, vcenter, esxi and workstation)
 # ---------------------------------------------------------------------------

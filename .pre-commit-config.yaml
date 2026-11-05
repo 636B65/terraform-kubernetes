@@ -25,9 +25,9 @@ repos:
 
   - repo: local
     hooks:
-      - id: common-variables
-        name: Common variables are identical in every platform
-        entry: scripts/check-common-variables.sh
+      - id: sync-common
+        name: Shared platform files are generated from shared/
+        entry: scripts/sync-common.sh --check
         language: script
-        files: (^|/)variables\.tf$
+        files: ^(shared/|scripts/sync-common\.sh$|[a-z]+/(variables|common|ansible)\.tf$)
         pass_filenames: false
