@@ -26,7 +26,12 @@ sudo DEBIAN_FRONTEND=noninteractive timeout 900 apt-get install -y -q --no-insta
   qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients
 
 step "Start libvirt"
-sudo timeout 120 systemctl enable --now libvirtd
+# The AppArmor profile libvirt generates for each VM does not cover the
+# volumes the provider creates, so QEMU cannot open the VM disks. The
+# provider documents turning the security driver off on such hosts.
+echo 'security_driver = "none"' | sudo tee -a /etc/libvirt/qemu.conf >/dev/null
+sudo timeout 120 systemctl enable libvirtd
+sudo timeout 120 systemctl restart libvirtd
 for _ in $(seq 1 30); do
   [[ -S /var/run/libvirt/libvirt-sock ]] && break
   sleep 2
