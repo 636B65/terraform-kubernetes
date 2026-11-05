@@ -121,6 +121,13 @@ resource "libvirt_domain" "vm" {
         }
         target = { bus = "virtio", dev = "vda" }
         driver = { type = "qcow2", discard = "unmap" }
+        # Name the base image as the backing file, so libvirt includes it in
+        # the VM's security labels (AppArmor on Ubuntu hosts denies it
+        # otherwise: "Could not open ...: Permission denied").
+        backing_store = {
+          format = { type = "qcow2" }
+          source = { file = { file = libvirt_volume.ubuntu.path } }
+        }
       },
       {
         device = "cdrom"
