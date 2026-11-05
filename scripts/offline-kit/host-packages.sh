@@ -37,7 +37,9 @@ case "$like" in
     out="/out/$distro"
     rm -rf "$out"
     mkdir -p "$out"
-    dnf download -q --resolve --destdir "$out" git-core sshpass xorriso openssh-clients tar gzip
+    # The whole dependency closure: a minimal RHEL (or UBI) lacks packages the
+    # container image has, and dnf installs only what is missing.
+    dnf download -q --resolve --alldeps --destdir "$out" git-core sshpass xorriso openssh-clients tar gzip
     dnf install -y -q createrepo_c
     createrepo_c -q "$out"
     ;;
