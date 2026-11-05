@@ -40,6 +40,10 @@ apply, and run the playbook on the new VMs.
 - Default `ansible_role_version` `v3.4.0`: with `run_ansible = true` the
   playbook runs again on `apply`. Velero and the other add-ons stay off
   unless you turn them on (`velero`, `ansible_extra_vars`).
+- **libvirt:** the domains get ACPI/APIC and a disk backing store, and the
+  base image volume gets a mode: Terraform replaces the libvirt VMs (and the
+  base volume). VMs from earlier versions never booted (see the
+  CHANGELOG), so there is nothing to keep.
 - Workstation: `terraform_data.template` is only created when you set
   `ubuntu_ova`, and only creates `template_vmx` if it does not exist yet.
 - Offline kit: the layout changed. Build a new kit with

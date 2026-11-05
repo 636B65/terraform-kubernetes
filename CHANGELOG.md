@@ -36,8 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Workstation: `ubuntu_ova` (with `ubuntu_image_sha256` and
   `template_network`) creates `template_vmx` with ovftool when it does not
   exist yet.
-- libvirt README: the AppArmor `Permission denied` fix
-  (`security_driver = "none"`), found by the E2E test.
 - `velero` variable for the Velero backup add-on of ansible-role-kubernetes
   (v3.3.0+): backups of all namespaces and volume data to S3/MinIO. Off by
   default.
@@ -49,6 +47,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   and the rendered cloud-init are unchanged.
 - Default `ansible_role_version` is `v3.4.0` (Velero add-on, offline bundle
   without a cluster, Renovate).
+
+### Fixed
+- **libvirt: the VMs did not boot.** The domain had no ACPI, so libvirt
+  started QEMU with `acpi=off` and Ubuntu never came up on the q35 machine.
+  ACPI and APIC are now enabled. The base image is readable for QEMU
+  (`0644`) and is named as the backing store of each VM disk. Found by the
+  new E2E test, which now deploys a two-node cluster on libvirt.
+- libvirt README: the AppArmor `Permission denied` fix on Ubuntu/Debian
+  hosts (`security_driver = "none"`).
+- `prepare-offline.sh` failed in a fresh clone ("Module not installed")
+  before mirroring the providers.
+- The role tracking workflow did not update `shared/`, so its pull requests
+  would fail the sync check.
 
 ## [0.7.0] - 2026-11-04
 
