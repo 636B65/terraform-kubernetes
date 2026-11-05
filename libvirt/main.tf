@@ -110,6 +110,13 @@ resource "libvirt_domain" "vm" {
     type_machine = "q35"
   }
 
+  # Without these libvirt starts QEMU with acpi=off, and the guest does not
+  # boot on q35.
+  features = {
+    acpi = true
+    apic = {}
+  }
+
   devices = {
     disks = [
       {
