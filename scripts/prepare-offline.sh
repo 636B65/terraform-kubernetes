@@ -137,7 +137,9 @@ for platform in "${platform_list[@]}"; do
     exit 1
   fi
   echo "== Terraform providers for $platform ($targets)"
-  (cd "$repo_root/$platform" && terraform providers mirror "${target_args[@]}" "$out/terraform-providers")
+  # The local modules must be installed before the providers can be listed.
+  (cd "$repo_root/$platform" && terraform get >/dev/null \
+    && terraform providers mirror "${target_args[@]}" "$out/terraform-providers")
 done
 
 sha256() { (sha256sum "$1" 2>/dev/null || shasum -a 256 "$1") | awk '{ print $1 }'; }
