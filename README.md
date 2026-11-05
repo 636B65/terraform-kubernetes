@@ -533,9 +533,10 @@ packages to cloud-init with `local.platform_packages` in its `main.tf`.
 
 CI (`.github/workflows/release.yml`) runs on every push and pull request:
 
-- `terraform fmt`, `init` and `validate` for every platform,
-- `terraform test` for `modules/cloud-init` (rendered cloud-init, networking,
-  offline) and `modules/ansible` (inventory, guards; mocked provider),
+- `fmt`, `init` and `validate` for every platform, with both Terraform and
+  OpenTofu,
+- `terraform test` / `tofu test` for `modules/cloud-init` (rendered cloud-init,
+  networking, offline) and `modules/ansible` (inventory, guards; mocked provider),
 - pre-commit with tflint, shellcheck, YAML checks and
   `scripts/sync-common.sh --check`, plus a Trivy misconfiguration scan,
 - a syntax check of every playbook in `ansible/` against the pinned role.

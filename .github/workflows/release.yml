@@ -17,27 +17,36 @@ permissions:
 
 jobs:
   validate:
-    name: Validate ${{ matrix.dir }}
+    name: Validate ${{ matrix.dir }} (${{ matrix.tool }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         dir: [proxmox, vcenter, esxi, workstation, libvirt, virtualbox]
+        tool: [terraform, tofu]
     steps:
       - uses: actions/checkout@v7
 
       - uses: hashicorp/setup-terraform@v4
+        if: matrix.tool == 'terraform'
 
-      - name: terraform fmt
-        run: terraform fmt -check -recursive -diff
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        if: matrix.tool == 'tofu'
+        with:
+          tofu_version: 1.13.9
 
-      - name: terraform init
+      - name: fmt
+        run: ${{ matrix.tool }} fmt -check -recursive -diff
+
+      # OpenTofu resolves the providers from its own registry, so it adds its
+      # entries to the lock file (in the runner only).
+      - name: init
         working-directory: ${{ matrix.dir }}
-        run: terraform init -backend=false -input=false
+        run: ${{ matrix.tool }} init -backend=false -input=false
 
-      - name: terraform validate
+      - name: validate
         working-directory: ${{ matrix.dir }}
-        run: terraform validate
+        run: ${{ matrix.tool }} validate
 
   ansible:
     name: Check Ansible playbook
@@ -68,24 +77,31 @@ jobs:
           done
 
   test:
-    name: terraform test ${{ matrix.module }}
+    name: Test ${{ matrix.module }} (${{ matrix.tool }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         module: [cloud-init, ansible]
+        tool: [terraform, tofu]
     steps:
       - uses: actions/checkout@v7
 
       - uses: hashicorp/setup-terraform@v4
+        if: matrix.tool == 'terraform'
 
-      - name: terraform init
-        working-directory: modules/${{ matrix.module }}
-        run: terraform init -backend=false -input=false
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        if: matrix.tool == 'tofu'
+        with:
+          tofu_version: 1.13.9
 
-      - name: terraform test
+      - name: init
         working-directory: modules/${{ matrix.module }}
-        run: terraform test
+        run: ${{ matrix.tool }} init -backend=false -input=false
+
+      - name: test
+        working-directory: modules/${{ matrix.module }}
+        run: ${{ matrix.tool }} test
 
   lint:
     name: Lint (pre-commit, tflint) and security scan
