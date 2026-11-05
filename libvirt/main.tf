@@ -32,8 +32,12 @@ resource "libvirt_volume" "ubuntu" {
     }
   }
 
+  # Uploaded volumes are private to root. QEMU runs as its own user and opens
+  # this image read-only as the backing file of every VM disk, so it must be
+  # readable ("Could not open ...: Permission denied" otherwise).
   target = {
-    format = { type = "qcow2" }
+    format      = { type = "qcow2" }
+    permissions = { mode = "0644" }
   }
 
   create = {
