@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Prepares a Linux host (a GitHub Actions runner or a lab machine) for the
+# libvirt end-to-end test: KVM access, libvirt, the "default" storage pool and
+# an isolated NAT network "e2e" (192.168.123.0/24, gateway and DNS on .1, no
+# DHCP, so the static IPs cannot collide). Needs sudo. Safe to run again.
+set -euo pipefail
+
+if [[ ! -e /dev/kvm ]]; then
+  echo "Error: /dev/kvm is missing; the host needs hardware virtualization." >&2
+  exit 1
+fi
+
+# Let QEMU (and the current user) open /dev/kvm.
+echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+  | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+sudo udevadm control --reload-rules
+sudo udevadm trigger --name-match=kvm
+
+sudo apt-get update -qq
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+  qemu-kvm qemu-utils libvirt-daemon-system libvirt-clients >/dev/null
+sudo systemctl enable --now libvirtd
+# The current user talks to qemu:///system without being in the libvirt group.
+sudo chmod 0666 /var/run/libvirt/libvirt-sock
+
+virsh() { command virsh --connect qemu:///system "$@"; }
+
+if ! virsh pool-info default >/dev/null 2>&1; then
+  virsh pool-define-as default dir --target /var/lib/libvirt/images
+  virsh pool-build default
+fi
+virsh pool-start default 2>/dev/null || true
+virsh pool-autostart default
+
+if ! virsh net-info e2e >/dev/null 2>&1; then
+  net_xml="$(mktemp)"
+  cat > "$net_xml" <<XML
+<network>
+  <name>e2e</name>
+  <forward mode='nat'/>
+  <bridge name='virbr-e2e' stp='on' delay='0'/>
+  <dns enable='yes'/>
+  <ip address='192.168.123.1' netmask='255.255.255.0'/>
+</network>
+XML
+  virsh net-define "$net_xml"
+  rm -f "$net_xml"
+fi
+virsh net-start e2e 2>/dev/null || true
+virsh net-autostart e2e
+
+virsh pool-list --all
+virsh net-list --all
