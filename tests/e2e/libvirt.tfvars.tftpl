@@ -1,0 +1,33 @@
+# Written by the E2E workflow (envsubst); see .github/workflows/e2e-libvirt.yml.
+libvirt_uri  = "qemu:///system"
+storage_pool = "default"
+network_name = "e2e"
+autostart    = false
+
+ubuntu_image_url    = "${E2E_IMAGE}"
+ubuntu_image_sha256 = "${E2E_IMAGE_SHA256}"
+
+# A small cluster that fits a 4 vCPU / 16 GB runner: one controller and one
+# worker, without Longhorn, the registry and Headlamp.
+vms = {
+  "kube-cp01" = { ip = "192.168.123.11", role = "control_plane", cpu = 2, memory_mb = 6144, disk_gb = 20 }
+  "kube-wl01" = { ip = "192.168.123.21", role = "worker", cpu = 2, memory_mb = 4096, disk_gb = 20 }
+}
+ip_prefix_length = 24
+gateway          = "192.168.123.1"
+dns_servers      = ["192.168.123.1"]
+dns_domain       = "e2e.local"
+
+vm_username     = "ubuntu"
+vm_password     = "${E2E_PASSWORD}"
+ssh_public_keys = ["${E2E_SSH_PUBLIC_KEY}"]
+
+run_ansible                     = true
+ansible_ssh_private_key_file    = "${E2E_SSH_KEY}"
+kubernetes_api_vip              = "192.168.123.10"
+kubernetes_keepalived_auth_pass = "e2e-vip1"
+ansible_extra_vars = {
+  kubernetes_longhorn_enabled = false
+  kubernetes_registry_enabled = false
+  kubernetes_headlamp_enabled = false
+}

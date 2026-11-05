@@ -1,0 +1,109 @@
+name: E2E (libvirt)
+
+# Deploys a real cluster every night: two Ubuntu 26.04 VMs on KVM/libvirt
+# inside the runner (libvirt/), installed with ansible-role-kubernetes
+# (run_ansible), then checks that both nodes are Ready. Without Longhorn, the
+# registry and Headlamp, so it fits a standard 4 vCPU / 16 GB runner.
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+  push:
+    branches-ignore: [main]
+    paths:
+      - .github/workflows/e2e-libvirt.yml
+      - tests/e2e/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-libvirt-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_BASE: https://cloud-images.ubuntu.com/releases/26.04/release
+  IMAGE_NAME: ubuntu-26.04-server-cloudimg-amd64.img
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Prepare KVM and libvirt
+        timeout-minutes: 25
+        run: tests/e2e/libvirt-host.sh
+
+      - name: Look up the image checksum
+        id: image
+        run: |
+          sha="$(curl -fsSL --retry 3 "$IMAGE_BASE/SHA256SUMS" | awk -v f="$IMAGE_NAME" '$2 == f || $2 == "*" f { print $1 }')"
+          test -n "$sha"
+          echo "sha256=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the Ubuntu image
+        uses: actions/cache@v6
+        with:
+          path: ~/e2e-image
+          key: ubuntu-image-${{ steps.image.outputs.sha256 }}
+
+      - name: Download the Ubuntu image
+        env:
+          SHA256: ${{ steps.image.outputs.sha256 }}
+        run: |
+          mkdir -p ~/e2e-image
+          if ! echo "$SHA256  $HOME/e2e-image/$IMAGE_NAME" | sha256sum -c --status 2>/dev/null; then
+            curl -fL --retry 3 -o ~/e2e-image/"$IMAGE_NAME" "$IMAGE_BASE/$IMAGE_NAME"
+            echo "$SHA256  $HOME/e2e-image/$IMAGE_NAME" | sha256sum -c
+          fi
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible
+        run: pip install ansible-core
+
+      - name: Write terraform.tfvars
+        env:
+          E2E_IMAGE_SHA256: ${{ steps.image.outputs.sha256 }}
+        run: |
+          ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/e2e
+          export E2E_IMAGE="$HOME/e2e-image/$IMAGE_NAME"
+          export E2E_SSH_KEY="$HOME/.ssh/e2e"
+          E2E_SSH_PUBLIC_KEY="$(cat ~/.ssh/e2e.pub)"
+          E2E_PASSWORD="$(openssl rand -hex 12)"
+          export E2E_IMAGE_SHA256 E2E_SSH_PUBLIC_KEY E2E_PASSWORD
+          envsubst < tests/e2e/libvirt.tfvars.tftpl > libvirt/terraform.tfvars
+
+      - name: terraform apply (VMs + Kubernetes)
+        working-directory: libvirt
+        run: |
+          terraform init -input=false
+          terraform apply -auto-approve -input=false
+
+      - name: Check the cluster
+        working-directory: libvirt
+        run: |
+          export KUBECONFIG="$(terraform output -raw kubeconfig)"
+          kubectl wait --for=condition=Ready nodes --all --timeout=10m
+          kubectl get nodes -o wide
+          kubectl get pods --all-namespaces -o wide
+          test "$(kubectl get nodes --no-headers | wc -l)" -eq 2
+          kubectl -n kube-system rollout status daemonset/cilium --timeout=10m
+
+      - name: Collect diagnostics
+        if: failure()
+        run: bash tests/e2e/diagnostics.sh kube-cp01=192.168.123.11 kube-wl01=192.168.123.21
+
+      - name: terraform destroy
+        if: always()
+        working-directory: libvirt
+        run: terraform destroy -auto-approve -input=false -no-color 2>&1 | tail -n 5 || true

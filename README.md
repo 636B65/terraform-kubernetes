@@ -232,6 +232,12 @@ The default libvirt network hands out DHCP leases from `.2` to `.254`. Shrink
 that range (`virsh net-edit default`) or use a bridge, so DHCP does not hand out
 the static IPs in `vms`.
 
+If the VMs do not start with `Could not open '/var/lib/libvirt/images/...':
+Permission denied`, the AppArmor profile libvirt generates for each VM (Ubuntu
+and Debian hosts) does not cover the disks. Add `security_driver = "none"` to
+`/etc/libvirt/qemu.conf` and restart libvirtd (`virtqemud`), as the libvirt
+provider documents. The E2E test does the same.
+
 ## VirtualBox
 
 There is no well-maintained Terraform provider for VirtualBox, so Terraform runs
