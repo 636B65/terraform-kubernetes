@@ -10,20 +10,33 @@ if [[ ! -e /dev/kvm ]]; then
   exit 1
 fi
 
-# Let QEMU (and the current user) open /dev/kvm.
+step() { echo "== $*"; }
+
+step "Allow QEMU to open /dev/kvm"
 echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
   | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
 sudo udevadm control --reload-rules
 sudo udevadm trigger --name-match=kvm
 
-sudo apt-get update -qq
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-  qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients >/dev/null
-sudo systemctl enable --now libvirtd
+step "Install QEMU and libvirt"
+# Rebuilding the man page index makes apt slow on CI runners.
+sudo rm -f /var/lib/man-db/auto-update
+sudo timeout 300 apt-get update -q
+sudo DEBIAN_FRONTEND=noninteractive timeout 900 apt-get install -y -q --no-install-recommends \
+  qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients
+
+step "Start libvirt"
+sudo timeout 120 systemctl enable --now libvirtd
+for _ in $(seq 1 30); do
+  [[ -S /var/run/libvirt/libvirt-sock ]] && break
+  sleep 2
+done
 # The current user talks to qemu:///system without being in the libvirt group.
 sudo chmod 0666 /var/run/libvirt/libvirt-sock
 
-virsh() { command virsh --connect qemu:///system "$@"; }
+virsh() { timeout 60 virsh --connect qemu:///system "$@"; }
+
+step "Storage pool"
 
 if ! virsh pool-info default >/dev/null 2>&1; then
   virsh pool-define-as default dir --target /var/lib/libvirt/images
@@ -32,6 +45,7 @@ fi
 virsh pool-start default 2>/dev/null || true
 virsh pool-autostart default
 
+step "Network e2e"
 if ! virsh net-info e2e >/dev/null 2>&1; then
   net_xml="$(mktemp)"
   cat > "$net_xml" <<XML
