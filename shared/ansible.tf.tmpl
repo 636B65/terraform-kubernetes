@@ -15,6 +15,7 @@ module "ansible" {
   api_vip_prefix       = var.ip_prefix_length
   keepalived_auth_pass = var.kubernetes_keepalived_auth_pass
   extra_vars           = var.ansible_extra_vars
+  velero               = var.velero
   playbook_args        = var.ansible_playbook_args
   offline              = var.offline
   offline_bundle       = var.offline_bundle

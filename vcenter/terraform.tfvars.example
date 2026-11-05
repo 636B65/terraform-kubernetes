@@ -69,3 +69,4 @@ kubernetes_keepalived_auth_pass = "k8s-vip1" # at most 8 characters
 # remove_nodes       = ["kube-wl03"] # drain + remove; delete from vms in a later apply
 # kubernetes_upgrade = true          # rolling upgrade when the role version changes
 # ansible_extra_vars = { kubernetes_ingress_enabled = true, kubernetes_cert_manager_enabled = true, kubernetes_argocd_enabled = true }
+# velero = { enabled = true, bucket = "velero", s3_url = "http://minio.lab.local:9000", access_key = "velero", secret_key = "..." }

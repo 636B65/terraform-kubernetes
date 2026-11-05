@@ -205,6 +205,30 @@ variable "ansible_extra_vars" {
   default     = {}
 }
 
+variable "velero" {
+  description = "Velero backups of the cluster (and, with volume_backups, the volume data) to S3-compatible storage, installed by ansible-role-kubernetes. Off unless enabled = true; then bucket, access_key and secret_key are required, and s3_url for anything but AWS S3."
+  type = object({
+    enabled                  = optional(bool, false)
+    bucket                   = optional(string, "")
+    s3_url                   = optional(string, "")
+    region                   = optional(string, "minio")
+    access_key               = optional(string, "")
+    secret_key               = optional(string, "")
+    insecure_skip_tls_verify = optional(bool, false)
+    volume_backups           = optional(bool, true)
+    schedule                 = optional(string, "0 3 * * *")
+    ttl                      = optional(string, "720h")
+  })
+  default   = {}
+  sensitive = true
+  nullable  = false
+
+  validation {
+    condition     = !var.velero.enabled || (var.velero.bucket != "" && var.velero.access_key != "" && var.velero.secret_key != "")
+    error_message = "velero.bucket, velero.access_key and velero.secret_key are required when velero.enabled = true."
+  }
+}
+
 variable "ansible_playbook_args" {
   description = "Extra arguments for ansible-playbook, e.g. [\"--tags\", \"bootstrap\"]."
   type        = list(string)

@@ -17,7 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `UPGRADING.md`: what each version changes for existing deployments, based
   on the rendered cloud-init of every release (VirtualBox and Workstation VMs
   are replaced when upgrading across 0.2.0, 0.3.3 and 0.6.0).
-- README example for the Velero add-on of ansible-role-kubernetes v3.3.0.
+- `velero` variable for the Velero backup add-on of ansible-role-kubernetes
+  (v3.3.0+): backups of all namespaces and volume data to S3/MinIO. Off by
+  default.
 
 ### Changed
 - The common variables, `common.tf` and `ansible.tf` (now with the Ansible

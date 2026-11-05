@@ -355,24 +355,34 @@ ansible-role-kubernetes (v3.2.0+) can install Traefik as ingress controller,
 cert-manager and Argo CD, and (v3.3.0+) Velero for backups of workloads and
 volume data to S3/MinIO (see its
 [add-on guide](https://github.com/636B65/ansible-role-kubernetes/blob/main/docs/addons.md)).
-Turn them on through `ansible_extra_vars`:
+All of them are off by default. Turn them on through `ansible_extra_vars`:
 
 ```hcl
 ansible_extra_vars = {
   kubernetes_ingress_enabled      = true # Traefik, NodePort 30080/30444
   kubernetes_cert_manager_enabled = true # with a "selfsigned" ClusterIssuer
   kubernetes_argocd_enabled       = true
-  # Velero: daily backup of all namespaces and volumes to a MinIO/S3 bucket.
-  kubernetes_velero_enabled = true
-  kubernetes_velero_bucket  = "velero"
-  kubernetes_velero_s3_url  = "http://minio.lab.local:9000"
 }
 ```
 
-Pass the S3 keys (`kubernetes_velero_s3_access_key`,
-`kubernetes_velero_s3_secret_key`) the same way, e.g. from `TF_VAR_` variables
-or a secret store, and keep them out of version control: the inventory holding
-them is written with mode `0600`.
+Velero has its own (sensitive) variable, since it needs S3 credentials. It is
+off unless `enabled = true`; then it backs up all namespaces, and with
+`volume_backups` (default) the volume data, every day at 03:00 (`schedule`),
+kept for 30 days (`ttl`):
+
+```hcl
+velero = {
+  enabled    = true
+  bucket     = "velero"
+  s3_url     = "http://minio.lab.local:9000" # leave out for AWS S3
+  region     = "minio"
+  access_key = "velero"
+  secret_key = "..." # e.g. TF_VAR_velero='{...}' or a secret store
+}
+```
+
+Keep the keys out of version control: the inventory holding them is written
+with mode `0600`.
 
 They are part of the offline bundle when they are enabled while staging.
 

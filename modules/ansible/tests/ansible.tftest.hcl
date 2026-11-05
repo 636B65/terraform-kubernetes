@@ -88,6 +88,44 @@ run "ssh_key_and_extra_vars" {
   }
 }
 
+run "velero_off_by_default" {
+  command = plan
+
+  assert {
+    condition     = length([for k in keys(yamldecode(local_sensitive_file.inventory.content).all.vars) : k if startswith(k, "kubernetes_velero_")]) == 0
+    error_message = "Velero is off unless enabled; the role defaults apply."
+  }
+}
+
+run "velero_enabled" {
+  command = plan
+
+  variables {
+    velero = {
+      enabled                  = true
+      bucket                   = "k8s-backups"
+      s3_url                   = "https://minio.lab.local:9000"
+      region                   = "minio"
+      access_key               = "velero"
+      secret_key               = "s3cret"
+      insecure_skip_tls_verify = false
+      volume_backups           = true
+      schedule                 = "0 3 * * *"
+      ttl                      = "720h"
+    }
+  }
+
+  assert {
+    condition = (
+      yamldecode(local_sensitive_file.inventory.content).all.vars.kubernetes_velero_enabled == true
+      && yamldecode(local_sensitive_file.inventory.content).all.vars.kubernetes_velero_bucket == "k8s-backups"
+      && yamldecode(local_sensitive_file.inventory.content).all.vars.kubernetes_velero_s3_url == "https://minio.lab.local:9000"
+      && yamldecode(local_sensitive_file.inventory.content).all.vars.kubernetes_velero_s3_secret_key == "s3cret"
+    )
+    error_message = "An enabled velero object must reach the role's kubernetes_velero_* variables."
+  }
+}
+
 run "offline_install" {
   command = plan
 

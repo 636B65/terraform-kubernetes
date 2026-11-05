@@ -56,6 +56,35 @@ variable "extra_vars" {
   type = any
 }
 
+variable "velero" {
+  description = "Velero settings (see the root velero variable); written to the role's kubernetes_velero_* variables when enabled."
+  type = object({
+    enabled                  = bool
+    bucket                   = string
+    s3_url                   = string
+    region                   = string
+    access_key               = string
+    secret_key               = string
+    insecure_skip_tls_verify = bool
+    volume_backups           = bool
+    schedule                 = string
+    ttl                      = string
+  })
+  sensitive = true
+  default = {
+    enabled                  = false
+    bucket                   = ""
+    s3_url                   = ""
+    region                   = "minio"
+    access_key               = ""
+    secret_key               = ""
+    insecure_skip_tls_verify = false
+    volume_backups           = true
+    schedule                 = "0 3 * * *"
+    ttl                      = "720h"
+  }
+}
+
 variable "playbook_args" {
   type = list(string)
 }

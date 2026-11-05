@@ -33,6 +33,19 @@ locals {
       kubernetes_offline_mode         = var.offline ? true : null
       offline_bundle                  = var.offline && var.offline_bundle != null ? abspath(pathexpand(var.offline_bundle)) : null
     } : k => v if v != null },
+    # A for filter, not a conditional: that would turn the values into strings.
+    { for k, v in {
+      kubernetes_velero_enabled                     = true
+      kubernetes_velero_bucket                      = var.velero.bucket
+      kubernetes_velero_s3_url                      = var.velero.s3_url
+      kubernetes_velero_s3_region                   = var.velero.region
+      kubernetes_velero_s3_access_key               = var.velero.access_key
+      kubernetes_velero_s3_secret_key               = var.velero.secret_key
+      kubernetes_velero_s3_insecure_skip_tls_verify = var.velero.insecure_skip_tls_verify
+      kubernetes_velero_volume_backups              = var.velero.volume_backups
+      kubernetes_velero_schedule                    = var.velero.schedule
+      kubernetes_velero_ttl                         = var.velero.ttl
+    } : k => v if var.velero.enabled },
     var.extra_vars,
   )
 
