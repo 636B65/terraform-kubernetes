@@ -18,7 +18,7 @@ sudo udevadm trigger --name-match=kvm
 
 sudo apt-get update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-  qemu-kvm qemu-utils libvirt-daemon-system libvirt-clients >/dev/null
+  qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients >/dev/null
 sudo systemctl enable --now libvirtd
 # The current user talks to qemu:///system without being in the libvirt group.
 sudo chmod 0666 /var/run/libvirt/libvirt-sock
