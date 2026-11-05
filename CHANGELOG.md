@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   the add-on switches for the build, `-K` skips it. One command now collects
   everything for an offline deployment. The Ubuntu image is chosen from the
   platforms (`-i auto`: `.img` for Proxmox/libvirt, OVA otherwise).
+- The offline kit installs on the offline Terraform/Ansible machine with
+  `install.sh` on Debian, Ubuntu, RHEL, Rocky Linux, AlmaLinux and Fedora:
+  Terraform binaries for every `-a` target, Ansible on a portable CPython
+  (python-build-standalone) instead of wheels for the build machine's
+  Python, and git, sshpass, xorriso and the OpenSSH client as local apt/dnf
+  repositories per release (`-d`). `install.ps1` sets up Terraform on
+  Windows (Ansible does not run there). A weekly CI job installs a kit
+  without network access on nine distribution images and on Windows.
 - Workstation: `ubuntu_ova` (with `ubuntu_image_sha256` and
   `template_network`) creates `template_vmx` with ovftool when it does not
   exist yet.

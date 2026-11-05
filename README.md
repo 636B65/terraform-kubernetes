@@ -443,8 +443,9 @@ side needs, and install from it.
 
 ### 1. Build the offline kit (online, no cluster needed)
 
-On a Linux machine with internet access, docker or podman, Terraform, git and
-Python, one command collects everything for the platforms you use:
+On a Linux machine with internet access, docker or podman, Terraform, git,
+curl and Python (with pip), one command collects everything for the
+platforms you use:
 
 ```bash
 scripts/prepare-offline.sh -o offline-kit -p workstation -t
@@ -452,10 +453,19 @@ scripts/prepare-offline.sh -o offline-kit -p workstation -t
 
 The kit holds:
 
-- the Terraform providers of the chosen platforms (a filesystem mirror and a
-  `terraformrc`; `-a` adds targets such as `windows_amd64` for a Windows
-  Workstation host),
-- Ansible as Python wheels, and ansible-role-kubernetes at the pinned version,
+- Terraform and the providers of the chosen platforms (a filesystem mirror)
+  for each target in `-a`, e.g. `-a linux_amd64,windows_amd64` for a Windows
+  Workstation host,
+- Ansible for Linux on a portable CPython
+  ([python-build-standalone](https://github.com/astral-sh/python-build-standalone)),
+  so it does not depend on the distribution's Python, and
+  ansible-role-kubernetes at the pinned version,
+- the host packages the Terraform/Ansible machine needs (git, sshpass,
+  xorriso, OpenSSH client) as local apt/dnf repositories for Debian 12/13,
+  Ubuntu 22.04/24.04/26.04, RHEL/Rocky/AlmaLinux 9/10 and Fedora, built in
+  containers of those releases (`-d` changes the list, `-d none` skips them),
+- `install.sh` (Linux) and `install.ps1` (Windows, Terraform only) to install
+  it all offline,
 - the Ubuntu 26.04 image the platforms need, verified against `SHA256SUMS`:
   the `.img` for Proxmox and libvirt, the OVA for vCenter, ESXi, Workstation
   and VirtualBox (`-i` overrides),
@@ -498,11 +508,30 @@ Expect several GB. The staging cluster can be destroyed afterwards.
 
 ### 2. Prepare the offline side
 
-Copy the kit to the machine that runs Terraform on the offline network and
-follow its `README.txt`: point `TF_CLI_CONFIG_FILE` at its `terraformrc`,
-install Ansible from its wheels, and set `ansible_role_source`, the image
+Copy the kit and this repository to the machine that runs Terraform on the
+offline network and install it:
+
+```bash
+sudo /path/to/offline-kit/install.sh   # Debian, Ubuntu, RHEL, Rocky, AlmaLinux, Fedora
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\offline-kit\install.ps1   # Windows: Terraform only
+```
+
+`install.sh` installs the host packages from the kit's repository for that
+release, Terraform, and Ansible in a virtual environment in the kit (linked
+into `/usr/local/bin`), and sets `TF_CLI_CONFIG_FILE` to the kit's
+`terraformrc` so `terraform init` uses the providers mirror. `install.ps1`
+does the Terraform part for the current user. Ansible does not run on
+Windows: there, set `run_ansible = false` and run the `ansible_command`
+output from a Linux machine or WSL with the kit installed.
+
+Then follow the kit's `README.txt`: set `ansible_role_source`, the image
 (`ubuntu_ova`, `ubuntu_image_url`, ...) and `offline_bundle` to the files in
-the kit. On Workstation, `ubuntu_ova` lets Terraform create the template.
+the kit. On Workstation, `ubuntu_ova` lets Terraform create the template. A
+weekly CI job installs a kit without network access on each of these
+distributions and on Windows, and runs `terraform init` from the mirror.
 
 Or do it by hand:
 

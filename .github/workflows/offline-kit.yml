@@ -1,0 +1,121 @@
+name: Offline kit
+
+# Builds the offline kit with scripts/prepare-offline.sh (without the
+# Kubernetes bundle and the Ubuntu images, which the role's workflow and the
+# release checks cover) and installs it without network access on every
+# supported Linux distribution and on Windows (Terraform only): the tools
+# must run and terraform init must find the providers in the mirror.
+
+on:
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+  push:
+    branches-ignore: [main]
+    paths:
+      - scripts/prepare-offline.sh
+      - scripts/offline-kit/**
+      - .github/workflows/offline-kit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Build the kit
+        run: scripts/prepare-offline.sh -o "$RUNNER_TEMP/kit" -p workstation,proxmox -a linux_amd64,windows_amd64 -i none -K
+
+      - name: Show the kit
+        run: |
+          cd "$RUNNER_TEMP/kit"
+          sed -n '1,/^3\./p' README.txt
+          du -sh -- * host-packages/*
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: offline-kit
+          path: ${{ runner.temp }}/kit
+          retention-days: 3
+
+  linux:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - debian:12
+          - debian:13
+          - ubuntu:22.04
+          - ubuntu:24.04
+          - ubuntu:26.04
+          - almalinux:9
+          - almalinux:10
+          - rockylinux/rockylinux:9
+          - fedora:latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: offline-kit
+          path: ${{ runner.temp }}/kit
+
+      - name: Install and use the kit without network access
+        run: |
+          docker run --rm --network none \
+            -v "$RUNNER_TEMP/kit:/kit" -v "$GITHUB_WORKSPACE:/repo:ro" \
+            "${{ matrix.image }}" bash -euc '
+              chmod 0755 /kit/install.sh /kit/terraform/linux_amd64/terraform
+              /kit/install.sh
+              . /etc/profile.d/terraform-kubernetes-kit.sh
+              terraform version
+              ansible-playbook --version
+              sshpass -V | head -n 1
+              git --version
+              xorriso -version 2>&1 | head -n 1
+              ssh -V
+              cp -r /repo /tmp/repo
+              for platform in workstation proxmox; do
+                (cd /tmp/repo/$platform && terraform init -backend=false -input=false -no-color | tail -n 2)
+              done
+              version="$(sed -n "/variable \"ansible_role_version\"/,/^}/s/.*default *= *\"\(.*\)\"/\1/p" /tmp/repo/proxmox/variables.tf)"
+              printf "roles:\n  - name: ansible-role-kubernetes\n    src: /kit/ansible-role-kubernetes\n    scm: git\n    version: %s\n" "$version" > /tmp/requirements.yml
+              ansible-galaxy role install -r /tmp/requirements.yml -p /tmp/roles
+              test -f /tmp/roles/ansible-role-kubernetes/tasks/main.yml
+            '
+
+  windows:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: offline-kit
+          path: ${{ runner.temp }}/kit
+
+      - name: Install the kit and initialize the Workstation and Proxmox directories
+        shell: pwsh
+        run: |
+          & "$env:RUNNER_TEMP\kit\install.ps1"
+          $env:TF_CLI_CONFIG_FILE = "$env:RUNNER_TEMP\kit\terraformrc"
+          $terraform = "$env:RUNNER_TEMP\kit\terraform\windows_amd64\terraform.exe"
+          foreach ($platform in 'workstation', 'proxmox') {
+            Push-Location $platform
+            & $terraform init -backend=false -input=false -no-color
+            if ($LASTEXITCODE -ne 0) { throw "terraform init failed in $platform" }
+            Pop-Location
+          }
