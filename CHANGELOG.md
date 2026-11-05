@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-05
+
+### Added
+- Nightly end-to-end test on libvirt: a real cluster (one controller, one
+  worker) is deployed on a KVM-enabled GitHub runner with `run_ansible`, and
+  both nodes must become Ready.
+- CI validates every platform and runs the module tests with OpenTofu as well
+  as Terraform.
+- `UPGRADING.md`: what each version changes for existing deployments, based
+  on the rendered cloud-init of every release (VirtualBox and Workstation VMs
+  are replaced when upgrading across 0.2.0, 0.3.3 and 0.6.0).
+- README example for the Velero add-on of ansible-role-kubernetes v3.3.0.
+
+### Changed
+- The common variables, `common.tf` and `ansible.tf` (now with the Ansible
+  outputs) are generated from `shared/` by `scripts/sync-common.sh`, instead of
+  being kept in sync by hand; `--check` runs in pre-commit and CI. Resources
+  and the rendered cloud-init are unchanged.
+- Default `ansible_role_version` is `v3.3.0` (Velero add-on, Renovate).
+
 ## [0.7.0] - 2026-11-04
 
 ### Added

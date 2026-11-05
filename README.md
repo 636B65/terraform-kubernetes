@@ -349,10 +349,11 @@ export KUBECONFIG=$(terraform output -raw kubeconfig)
 kubectl get nodes
 ```
 
-### Add-ons: ingress, cert-manager, Argo CD
+### Add-ons: ingress, cert-manager, Argo CD, Velero
 
 ansible-role-kubernetes (v3.2.0+) can install Traefik as ingress controller,
-cert-manager and Argo CD (see its
+cert-manager and Argo CD, and (v3.3.0+) Velero for backups of workloads and
+volume data to S3/MinIO (see its
 [add-on guide](https://github.com/636B65/ansible-role-kubernetes/blob/main/docs/addons.md)).
 Turn them on through `ansible_extra_vars`:
 
@@ -361,8 +362,17 @@ ansible_extra_vars = {
   kubernetes_ingress_enabled      = true # Traefik, NodePort 30080/30444
   kubernetes_cert_manager_enabled = true # with a "selfsigned" ClusterIssuer
   kubernetes_argocd_enabled       = true
+  # Velero: daily backup of all namespaces and volumes to a MinIO/S3 bucket.
+  kubernetes_velero_enabled = true
+  kubernetes_velero_bucket  = "velero"
+  kubernetes_velero_s3_url  = "http://minio.lab.local:9000"
 }
 ```
+
+Pass the S3 keys (`kubernetes_velero_s3_access_key`,
+`kubernetes_velero_s3_secret_key`) the same way, e.g. from `TF_VAR_` variables
+or a secret store, and keep them out of version control: the inventory holding
+them is written with mode `0600`.
 
 They are part of the offline bundle when they are enabled while staging.
 
@@ -540,6 +550,14 @@ CI (`.github/workflows/release.yml`) runs on every push and pull request:
 - pre-commit with tflint, shellcheck, YAML checks and
   `scripts/sync-common.sh --check`, plus a Trivy misconfiguration scan,
 - a syntax check of every playbook in `ansible/` against the pinned role.
+
+A nightly end-to-end test (`.github/workflows/e2e-libvirt.yml`) turns a
+GitHub runner into a KVM host and deploys a real cluster with the libvirt
+platform: one controller and one worker on an isolated libvirt network,
+installed with `run_ansible` (without Longhorn, the registry and Headlamp to
+fit the runner), and checks that both nodes are Ready. It also runs by hand
+and on branches that change the test. `tests/e2e/libvirt-host.sh` prepares
+any Ubuntu machine with KVM the same way, to run the test in a lab.
 
 Run the same checks locally:
 
