@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `kubernetes-offline.vars.json`.
 - End-to-end scenarios on libvirt besides the nightly `basic` one, weekly and
   by hand: `addons` (Argo CD, Traefik, cert-manager, and Velero with a backup
-  to MinIO), `offline` (no route out, installed from a kit built with `-f`)
+  to an S3 server on the runner), `offline` (no route out, installed from a kit built with `-f`)
   and `upgrade` (previous release, then this commit; no VM may be replaced).
 - CI runs the Workstation platform end to end with fake `vmrun`,
   `vmware-vdiskmanager` and `ovftool` (`tests/workstation/run.sh`).

@@ -649,7 +649,7 @@ registry and Headlamp to fit the runner). Scenarios
 | Scenario | When | Checks |
 |----------|------|--------|
 | `basic` | nightly | both nodes Ready, Cilium and Argo CD running |
-| `addons` | weekly | also Traefik, cert-manager (ClusterIssuer ready) and Velero, with a backup written to MinIO on the runner |
+| `addons` | weekly | also Traefik, cert-manager (ClusterIssuer ready) and Velero, with a backup written to an S3 server (moto) on the runner |
 | `offline` | weekly | the VMs have no route out; the kit is built with `scripts/prepare-offline.sh -f terraform.tfvars` and the cluster is installed from its bundle |
 | `upgrade` | weekly | the previous release is deployed, this commit is applied on top, no VM may be replaced, and the cluster must be healthy afterwards |
 

@@ -10,20 +10,22 @@
 #                                   replaces or deletes a VM
 #
 # Scenarios: basic (the cluster), addons (Argo CD, Traefik, cert-manager and
-# Velero with a backup to MinIO on the host), offline (VMs without a route
+# Velero with a backup to an S3 server on the host (moto)), offline (VMs without a route
 # out, installed from a kit built with scripts/prepare-offline.sh), upgrade
 # (the previous release, then this commit applied on top).
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# The checkout, also when this script runs from a copy (the upgrade scenario).
+repo_root="$(git rev-parse --show-toplevel)"
 kit="$HOME/e2e-kit"
-minio_user=e2e-velero
-minio_password_file="$HOME/.e2e-minio-password"
+s3_user=e2e-velero
+s3_password_file="$HOME/.e2e-s3-password"
+s3_url=http://192.168.123.1:9000
 
 tfvars() {
   local scenario="$1"
   [[ -f ~/.ssh/e2e ]] || ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/e2e
-  [[ -s "$minio_password_file" ]] || openssl rand -hex 16 > "$minio_password_file"
+  [[ -s "$s3_password_file" ]] || openssl rand -hex 16 > "$s3_password_file"
   E2E_IMAGE="$HOME/e2e-image/$IMAGE_NAME"
   E2E_SSH_KEY="$HOME/.ssh/e2e"
   E2E_SSH_PUBLIC_KEY="$(cat ~/.ssh/e2e.pub)"
@@ -44,14 +46,14 @@ tfvars() {
     addons)
       cat >> "$repo_root/libvirt/terraform.tfvars" <<HCL
 
-# Velero backs up to MinIO on the runner (the network's gateway).
+# Velero backs up to the S3 server on the runner (the network's gateway).
 velero = {
   enabled        = true
   bucket         = "velero"
-  s3_url         = "http://192.168.123.1:9000"
+  s3_url         = "$s3_url"
   region         = "minio"
-  access_key     = "$minio_user"
-  secret_key     = "$(cat "$minio_password_file")"
+  access_key     = "$s3_user"
+  secret_key     = "$(cat "$s3_password_file")"
   volume_backups = false
 }
 HCL
@@ -70,14 +72,15 @@ HCL
 prepare() {
   case "$1" in
     addons)
-      mkdir -p "$HOME/e2e-minio/velero"
-      docker run -d --name e2e-minio -p 192.168.123.1:9000:9000 \
-        -e MINIO_ROOT_USER="$minio_user" -e MINIO_ROOT_PASSWORD="$(cat "$minio_password_file")" \
-        -v "$HOME/e2e-minio:/data" quay.io/minio/minio:latest server /data >/dev/null
+      # An S3 server for Velero on the network's gateway. moto keeps the
+      # objects in memory and accepts any keys.
+      pip install --quiet "moto[server]"
+      nohup moto_server -H 192.168.123.1 -p 9000 > "$HOME/e2e-s3.log" 2>&1 &
       for _ in $(seq 1 30); do
-        curl -fsS http://192.168.123.1:9000/minio/health/live >/dev/null && break
-        sleep 2
+        curl -fsS "$s3_url/" >/dev/null 2>&1 && break
+        sleep 1
       done
+      curl -fsS -X PUT "$s3_url/velero" >/dev/null
       ;;
     offline)
       # The kit's bundle is built from the scenario's terraform.tfvars, the
@@ -109,7 +112,7 @@ check() {
     addons)
       wait_deployments traefik cert-manager velero
       kubectl get clusterissuer selfsigned -o jsonpath='{.status.conditions[0].status}' | grep -qx True
-      echo "== Velero backup to MinIO"
+      echo "== Velero backup to S3"
       for _ in $(seq 1 60); do
         phase="$(kubectl -n velero get backupstoragelocations default -o jsonpath='{.status.phase}' 2>/dev/null || true)"
         [[ "$phase" == Available ]] && break
@@ -133,7 +136,9 @@ YAML
       done
       echo "backup: $phase"
       [[ "$phase" == Completed ]]
-      sudo find "$HOME/e2e-minio/velero" -maxdepth 3 | head -n 20
+      echo "== objects in the bucket"
+      curl -fsS "$s3_url/velero?list-type=2" | grep -o '<Key>[^<]*</Key>' | head -n 20
+      curl -fsS "$s3_url/velero?list-type=2" | grep -q '<Key>backups/e2e/' 
       ;;
     offline)
       echo "== the VMs have no route out"

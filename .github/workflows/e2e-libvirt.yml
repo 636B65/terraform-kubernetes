@@ -6,7 +6,7 @@ name: E2E (libvirt)
 #
 #   basic    nightly: both nodes Ready, Cilium and Argo CD (default) running
 #   addons   weekly: also Traefik, cert-manager and Velero, with a backup to
-#            MinIO on the runner
+#            an S3 server (moto) on the runner
 #   offline  weekly: the VMs have no route out; the kit is built with
 #            scripts/prepare-offline.sh -f terraform.tfvars and the cluster is
 #            installed from its bundle
