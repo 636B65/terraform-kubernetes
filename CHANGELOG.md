@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   shared `.tf` files. They show how to turn Argo CD off, and the offline kit.
 
 ### Fixed
+- Offline installs: Hubble UI stayed Pending because its images were pinned by
+  digest (default `ansible_role_version` is now `v3.4.1`, which renders them
+  tag-only). Found by the new `offline` end-to-end scenario.
 - Offline installs with the default settings failed since 0.9.0: Terraform
   turned Argo CD on, but the kit built the bundle with the role's defaults
   (Argo CD off), so its chart and images were missing. The bundle now always
