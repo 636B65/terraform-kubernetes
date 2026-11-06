@@ -138,7 +138,7 @@ YAML
       [[ "$phase" == Completed ]]
       echo "== objects in the bucket"
       curl -fsS "$s3_url/velero?list-type=2" | grep -o '<Key>[^<]*</Key>' | head -n 20
-      curl -fsS "$s3_url/velero?list-type=2" | grep -q '<Key>backups/e2e/' 
+      curl -fsS "$s3_url/velero?list-type=2" | grep -q '<Key>backups/e2e/'
       ;;
     offline)
       echo "== the VMs have no route out"
