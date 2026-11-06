@@ -88,6 +88,28 @@ run "ssh_key_and_extra_vars" {
   }
 }
 
+run "argocd_on_by_default" {
+  command = plan
+
+  assert {
+    condition     = yamldecode(local_sensitive_file.inventory.content).all.vars.kubernetes_argocd_enabled == true
+    error_message = "Argo CD is installed unless extra_vars turns it off."
+  }
+}
+
+run "argocd_can_be_turned_off" {
+  command = plan
+
+  variables {
+    extra_vars = { kubernetes_argocd_enabled = false }
+  }
+
+  assert {
+    condition     = yamldecode(local_sensitive_file.inventory.content).all.vars.kubernetes_argocd_enabled == false
+    error_message = "extra_vars must override the Argo CD default."
+  }
+}
+
 run "velero_off_by_default" {
   command = plan
 

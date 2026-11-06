@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-06
+
+### Changed
+- Argo CD is installed by default (`kubernetes_argocd_enabled = true`, role
+  add-on since v3.2.0). Turn it off with
+  `ansible_extra_vars = { kubernetes_argocd_enabled = false }`. See
+  [UPGRADING.md](UPGRADING.md).
+
 ## [0.8.0] - 2026-11-05
 
 ### Added

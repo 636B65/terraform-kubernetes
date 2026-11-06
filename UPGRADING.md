@@ -34,6 +34,15 @@ the VMs. To keep a cluster there, stay on the version you have, or rebuild it
 deliberately: back up what you need (`etcd_backup_command`, your workloads),
 apply, and run the playbook on the new VMs.
 
+## 0.8.x → 0.9.0
+
+No VM is replaced. With `run_ansible = true` the next `apply` runs the
+playbook again and installs Argo CD (namespace `argocd`, ClusterIP service) on
+the existing cluster. To keep a cluster without it, set
+`ansible_extra_vars = { kubernetes_argocd_enabled = false }` before applying.
+Turning it off later does not uninstall it. With `offline = true`, stage the
+bundle again so it contains the Argo CD chart and images.
+
 ## 0.7.x → 0.8.0
 
 - No change to the rendered cloud-init.

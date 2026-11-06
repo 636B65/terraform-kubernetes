@@ -30,6 +30,7 @@ locals {
       kubernetes_api_vip              = var.api_vip
       kubernetes_api_vip_prefix       = var.api_vip_prefix
       kubernetes_keepalived_auth_pass = var.keepalived_auth_pass
+      kubernetes_argocd_enabled       = true # on by default; set false in extra_vars to skip
       kubernetes_offline_mode         = var.offline ? true : null
       offline_bundle                  = var.offline && var.offline_bundle != null ? abspath(pathexpand(var.offline_bundle)) : null
     } : k => v if v != null },
