@@ -43,17 +43,24 @@ run_ansible                     = false
 ansible_role_version            = "v3.4.0"
 kubernetes_api_vip              = "192.168.1.100" # free IP, not used by any VM
 kubernetes_keepalived_auth_pass = "k8s-vip1" # at most 8 characters
-# ansible_extra_vars = { kubernetes_observability_enabled = true }
+
+# --- Add-ons (see README "Add-ons") ------------------------------------------
+# Argo CD is installed by default; Traefik, cert-manager and Velero are off.
+# ansible_extra_vars = { kubernetes_argocd_enabled = false } # without Argo CD
+# ansible_extra_vars = { kubernetes_ingress_enabled = true, kubernetes_cert_manager_enabled = true }
+# velero = { enabled = true, bucket = "velero", s3_url = "http://minio.lab.local:9000", access_key = "velero", secret_key = "..." }
 
 # --- Offline / air-gapped (see README "Offline (air-gapped) deployment") -------
-# Stage a bundle on an online cluster (needs run_ansible = true):
-# stage_offline_bundle = true
-# offline_bundle       = "~/kubernetes-offline.tar"
-# ...or install from it on an offline network:
+# Build the kit (with the bundle for this file's add-ons) on a connected machine:
+#   scripts/prepare-offline.sh -f terraform.tfvars -p <platform> -t
+# then install from it on the offline network:
 # offline        = true
-# offline_bundle = "~/kubernetes-offline.tar"
+# offline_bundle = "/path/to/offline-kit/kubernetes-offline.tar"
 # ntp_servers    = ["10.0.0.5"]
 # apt_mirror     = "http://mirror.lab.local/ubuntu" # optional internal mirror
+# Or stage a bundle on an online cluster (needs run_ansible = true):
+# stage_offline_bundle = true
+# offline_bundle       = "~/kubernetes-offline.tar"
 
 # --- IPv6 and a second NIC (see README "Networking") ---------------------------
 # Per VM: ipv6 = "2001:db8::101", secondary_ip = "10.10.0.101" in vms.
@@ -67,5 +74,3 @@ kubernetes_keepalived_auth_pass = "k8s-vip1" # at most 8 characters
 # --- Cluster operations (need run_ansible = true) ---------------------------------
 # remove_nodes       = ["kube-wl03"] # drain + remove; delete from vms in a later apply
 # kubernetes_upgrade = true          # rolling upgrade when the role version changes
-# ansible_extra_vars = { kubernetes_ingress_enabled = true, kubernetes_cert_manager_enabled = true, kubernetes_argocd_enabled = true }
-# velero = { enabled = true, bucket = "velero", s3_url = "http://minio.lab.local:9000", access_key = "velero", secret_key = "..." }

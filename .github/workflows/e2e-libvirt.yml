@@ -1,14 +1,31 @@
 name: E2E (libvirt)
 
-# Deploys a real cluster every night: two Ubuntu 26.04 VMs on KVM/libvirt
-# inside the runner (libvirt/), installed with ansible-role-kubernetes
-# (run_ansible), then checks that both nodes are Ready. Without Longhorn, the
-# registry and Headlamp, so it fits a standard 4 vCPU / 16 GB runner.
+# Deploys real clusters: two Ubuntu 26.04 VMs on KVM/libvirt inside the runner
+# (libvirt/), installed with ansible-role-kubernetes (run_ansible). Without
+# Longhorn, the registry and Headlamp, so it fits a 4 vCPU / 16 GB runner.
+#
+#   basic    nightly: both nodes Ready, Cilium and Argo CD (default) running
+#   addons   weekly: also Traefik, cert-manager and Velero, with a backup to
+#            MinIO on the runner
+#   offline  weekly: the VMs have no route out; the kit is built with
+#            scripts/prepare-offline.sh -f terraform.tfvars and the cluster is
+#            installed from its bundle
+#   upgrade  weekly: the previous release is deployed, then this commit is
+#            applied on top; no VM may be replaced
+#
+# By hand: choose a scenario, or "all".
 
 on:
   schedule:
     - cron: "23 2 * * *"
+    - cron: "47 3 * * 0"
   workflow_dispatch:
+    inputs:
+      scenario:
+        description: Scenario
+        type: choice
+        options: [basic, addons, offline, upgrade, all]
+        default: basic
   push:
     branches-ignore: [main]
     paths:
@@ -19,7 +36,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-libvirt-${{ github.ref }}
+  group: e2e-libvirt-${{ github.ref }}-${{ github.event.inputs.scenario || github.event.schedule || 'push' }}
   cancel-in-progress: true
 
 env:
@@ -27,14 +44,43 @@ env:
   IMAGE_NAME: ubuntu-26.04-server-cloudimg-amd64.img
 
 jobs:
-  e2e:
+  scenarios:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    outputs:
+      list: ${{ steps.pick.outputs.list }}
+    steps:
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          INPUT: ${{ github.event.inputs.scenario }}
+        run: |
+          case "$EVENT:$SCHEDULE:$INPUT" in
+            schedule:"47 3 * * 0":*) list='["addons","offline","upgrade"]' ;;
+            workflow_dispatch::all) list='["basic","addons","offline","upgrade"]' ;;
+            workflow_dispatch::*) list="[\"$INPUT\"]" ;;
+            *) list='["basic"]' ;;
+          esac
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+
+  e2e:
+    needs: scenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(needs.scenarios.outputs.list) }}
+    name: e2e (${{ matrix.scenario }})
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Prepare KVM and libvirt
         timeout-minutes: 25
+        env:
+          E2E_NETWORK: ${{ matrix.scenario == 'offline' && 'isolated' || 'nat' }}
         run: tests/e2e/libvirt-host.sh
 
       - name: Look up the image checksum
@@ -71,17 +117,28 @@ jobs:
       - name: Install Ansible
         run: pip install ansible-core
 
-      - name: Write terraform.tfvars
+      - name: Check out the previous release
+        if: matrix.scenario == 'upgrade'
+        id: previous
+        run: |
+          current="v$(cat VERSION)"
+          previous="$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vx "$current" | head -n 1)"
+          echo "Upgrading from $previous to $(git rev-parse --short HEAD)"
+          echo "tag=$previous" >> "$GITHUB_OUTPUT"
+          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          # The scenario scripts of this commit are used for both steps.
+          cp -r tests/e2e "$RUNNER_TEMP/e2e"
+          git checkout -q "$previous"
+
+      - name: Write terraform.tfvars and prepare the host
         env:
           E2E_IMAGE_SHA256: ${{ steps.image.outputs.sha256 }}
+          SCENARIO: ${{ matrix.scenario }}
         run: |
-          ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/e2e
-          export E2E_IMAGE="$HOME/e2e-image/$IMAGE_NAME"
-          export E2E_SSH_KEY="$HOME/.ssh/e2e"
-          E2E_SSH_PUBLIC_KEY="$(cat ~/.ssh/e2e.pub)"
-          E2E_PASSWORD="$(openssl rand -hex 12)"
-          export E2E_IMAGE_SHA256 E2E_SSH_PUBLIC_KEY E2E_PASSWORD
-          envsubst < tests/e2e/libvirt.tfvars.tftpl > libvirt/terraform.tfvars
+          scripts="tests/e2e"
+          [[ "$SCENARIO" != upgrade ]] || scripts="$RUNNER_TEMP/e2e"
+          bash "$scripts/scenario.sh" tfvars "$SCENARIO"
+          bash "$scripts/scenario.sh" prepare "$SCENARIO"
 
       - name: terraform apply (VMs + Kubernetes)
         working-directory: libvirt
@@ -89,15 +146,26 @@ jobs:
           terraform init -input=false
           terraform apply -auto-approve -input=false
 
+      - name: Upgrade to this commit
+        if: matrix.scenario == 'upgrade'
+        working-directory: libvirt
+        env:
+          HEAD_SHA: ${{ steps.previous.outputs.head }}
+        run: |
+          KUBECONFIG="$(terraform output -raw kubeconfig)" bash "$RUNNER_TEMP/e2e/scenario.sh" check nodes
+          git checkout -q "$HEAD_SHA"
+          terraform init -input=false -upgrade
+          terraform plan -input=false -out=upgrade.plan
+          bash ../tests/e2e/scenario.sh no-replaced-vms
+          terraform apply -input=false upgrade.plan
+
       - name: Check the cluster
         working-directory: libvirt
+        env:
+          SCENARIO: ${{ matrix.scenario }}
         run: |
           export KUBECONFIG="$(terraform output -raw kubeconfig)"
-          kubectl wait --for=condition=Ready nodes --all --timeout=10m
-          kubectl get nodes -o wide
-          kubectl get pods --all-namespaces -o wide
-          test "$(kubectl get nodes --no-headers | wc -l)" -eq 2
-          kubectl -n kube-system rollout status daemonset/cilium --timeout=10m
+          bash ../tests/e2e/scenario.sh check "$SCENARIO"
 
       - name: Collect diagnostics
         if: failure()

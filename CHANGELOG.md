@@ -6,6 +6,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-06
+
+### Added
+- `scripts/prepare-offline.sh -f terraform.tfvars`: the bundle gets the
+  add-ons and versions of the cluster's settings (`ansible_extra_vars`,
+  `velero`), read through the new `modules/role-vars`, the module that also
+  writes the inventory. The result is kept in the kit as
+  `kubernetes-offline.vars.json`.
+- End-to-end scenarios on libvirt besides the nightly `basic` one, weekly and
+  by hand: `addons` (Argo CD, Traefik, cert-manager, and Velero with a backup
+  to MinIO), `offline` (no route out, installed from a kit built with `-f`)
+  and `upgrade` (previous release, then this commit; no VM may be replaced).
+- CI runs the Workstation platform end to end with fake `vmrun`,
+  `vmware-vdiskmanager` and `ovftool` (`tests/workstation/run.sh`).
+
+### Changed
+- The `terraform.tfvars.example` files are generated from
+  `shared/terraform.tfvars.example.tmpl` from the Login section on, like the
+  shared `.tf` files. They show how to turn Argo CD off, and the offline kit.
+
+### Fixed
+- Offline installs with the default settings failed since 0.9.0: Terraform
+  turned Argo CD on, but the kit built the bundle with the role's defaults
+  (Argo CD off), so its chart and images were missing. The bundle now always
+  has the template defaults, and with `-f` the cluster's own settings.
+- The README still said that every add-on is off by default.
+- The role tracking workflow also updates the shared tfvars example.
+
 ## [0.9.0] - 2026-11-06
 
 ### Changed

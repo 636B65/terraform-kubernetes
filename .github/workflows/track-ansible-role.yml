@@ -58,7 +58,7 @@ jobs:
           fi
 
           sed -i '/variable "ansible_role_version"/,/^}/s/default *= *"[^"]*"/default     = "'"$LATEST"'"/' shared/variables.common.tf.tmpl */variables.tf
-          sed -i 's/^\(ansible_role_version *= *\)"[^"]*"/\1"'"$LATEST"'"/' */terraform.tfvars.example
+          sed -i 's/^\(ansible_role_version *= *\)"[^"]*"/\1"'"$LATEST"'"/' shared/terraform.tfvars.example.tmpl */terraform.tfvars.example
           sed -i '/`ansible_role_version`/s/`v[0-9][0-9.]*`/`'"$LATEST"'`/' README.md
           awk -v line="- ansible-role-kubernetes $CURRENT -> $LATEST ([release notes](https://github.com/$ROLE_REPO/releases/tag/$LATEST))." '
             { print }

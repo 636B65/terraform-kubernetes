@@ -1,6 +1,13 @@
 # Generates an Ansible inventory for ansible-role-kubernetes and optionally
 # installs the role and runs the playbook against the new VMs.
 
+module "role_vars" {
+  source = "../role-vars"
+
+  extra_vars = var.extra_vars
+  velero     = var.velero
+}
+
 locals {
   hosts_in = {
     for role in ["control_plane", "worker"] : role => {
@@ -23,31 +30,19 @@ locals {
     : { ansible_ssh_private_key_file = pathexpand(var.ssh_private_key_file) },
   )
 
-  # Unset (null) values are left out so the role defaults apply.
+  # Unset (null) values are left out so the role defaults apply. The
+  # template defaults, Velero and extra_vars come from modules/role-vars, which
+  # the offline bundle build uses as well.
   role_vars = merge(
     { for k, v in {
       loginusername                   = var.username
       kubernetes_api_vip              = var.api_vip
       kubernetes_api_vip_prefix       = var.api_vip_prefix
       kubernetes_keepalived_auth_pass = var.keepalived_auth_pass
-      kubernetes_argocd_enabled       = true # on by default; set false in extra_vars to skip
       kubernetes_offline_mode         = var.offline ? true : null
       offline_bundle                  = var.offline && var.offline_bundle != null ? abspath(pathexpand(var.offline_bundle)) : null
     } : k => v if v != null },
-    # A for filter, not a conditional: that would turn the values into strings.
-    { for k, v in {
-      kubernetes_velero_enabled                     = true
-      kubernetes_velero_bucket                      = var.velero.bucket
-      kubernetes_velero_s3_url                      = var.velero.s3_url
-      kubernetes_velero_s3_region                   = var.velero.region
-      kubernetes_velero_s3_access_key               = var.velero.access_key
-      kubernetes_velero_s3_secret_key               = var.velero.secret_key
-      kubernetes_velero_s3_insecure_skip_tls_verify = var.velero.insecure_skip_tls_verify
-      kubernetes_velero_volume_backups              = var.velero.volume_backups
-      kubernetes_velero_schedule                    = var.velero.schedule
-      kubernetes_velero_ttl                         = var.velero.ttl
-    } : k => v if var.velero.enabled },
-    var.extra_vars,
+    module.role_vars.vars,
   )
 
   inventory = yamlencode({

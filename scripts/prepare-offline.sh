@@ -36,10 +36,13 @@
 #                 .img for proxmox/libvirt, OVA for the VMware platforms and
 #                 VirtualBox)
 #   -r VERSION    Role version (default: ansible_role_version in the repo)
-#   -e FILE       Ansible variables (YAML) for the bundle build, repeatable:
-#                 the same add-on switches and versions as the offline
-#                 cluster, e.g. kubernetes_velero_enabled: true. Add-ons are
-#                 off by default, like in the role.
+#   -f TFVARS     The terraform.tfvars of the offline cluster: the bundle
+#                 gets the add-ons and versions it sets (ansible_extra_vars,
+#                 velero). Without it, the bundle has the template defaults
+#                 (Argo CD on, the other add-ons off).
+#   -e FILE       More Ansible variables (YAML) for the bundle build,
+#                 repeatable, applied after -f, e.g.
+#                 kubernetes_velero_enabled: true.
 #   -K            Skip the Kubernetes bundle
 #   -t            Also pack the directory into DIR.tar
 #
@@ -60,6 +63,7 @@ role_version=""
 pack=0
 bundle=1
 var_files=()
+tfvars=""
 build_image="${BUILD_IMAGE:-ubuntu:26.04}"
 releases="debian:13,ubuntu:26.04,almalinux:10,fedora:latest"
 python_tag="${PYTHON_STANDALONE_TAG:-20261020}"
@@ -69,7 +73,7 @@ role_url="https://github.com/636B65/ansible-role-kubernetes.git"
 image_base="${UBUNTU_IMAGE_BASE:-https://cloud-images.ubuntu.com/releases/26.04/release}"
 image_name="ubuntu-26.04-server-cloudimg-amd64"
 
-while getopts "o:p:a:d:i:r:e:Kth" opt; do
+while getopts "o:p:a:d:i:r:f:e:Kth" opt; do
   case "$opt" in
     o) out="$OPTARG" ;;
     p) platforms="$OPTARG" ;;
@@ -79,6 +83,8 @@ while getopts "o:p:a:d:i:r:e:Kth" opt; do
     r) role_version="$OPTARG" ;;
     e) [[ -f "$OPTARG" ]] || { echo "Error: $OPTARG does not exist." >&2; exit 1; }
        var_files+=("$(cd "$(dirname "$OPTARG")" && pwd)/$(basename "$OPTARG")") ;;
+    f) [[ -f "$OPTARG" ]] || { echo "Error: $OPTARG does not exist." >&2; exit 1; }
+       tfvars="$(cd "$(dirname "$OPTARG")" && pwd)/$(basename "$OPTARG")" ;;
     K) bundle=0 ;;
     t) pack=1 ;;
     h) sed -n '2,/^set -euo/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -239,8 +245,45 @@ if [[ "$bundle" == 1 ]]; then
   [[ -f "$role_tree/ansible-role-kubernetes/examples/offline-build.yml" ]] \
     || { echo "Error: role $role_version cannot build a bundle without a cluster (needs v3.4.0 or later)." >&2; exit 1; }
 
+  # The role variables the cluster will use (modules/role-vars, the same
+  # module that writes the inventory), so the bundle has what it installs.
+  vars_root="$role_tree/role-vars"
+  mkdir -p "$vars_root"
+  cat > "$vars_root/main.tf" <<TF
+variable "ansible_extra_vars" {
+  type    = any
+  default = {}
+}
+
+variable "velero" {
+  type      = any
+  default   = {}
+  sensitive = true
+}
+
+module "role_vars" {
+  source     = "$repo_root/modules/role-vars"
+  extra_vars = var.ansible_extra_vars
+  velero     = var.velero
+}
+
+output "bundle_vars" {
+  value = module.role_vars.bundle_vars
+}
+TF
+  tf_args=()
+  [[ -z "$tfvars" ]] || tf_args=("-var-file=$tfvars")
+  terraform -chdir="$vars_root" init -backend=false -input=false >/dev/null
+  terraform -chdir="$vars_root" plan -input=false -compact-warnings -out=plan "${tf_args[@]}" >/dev/null
+  terraform -chdir="$vars_root" show -json plan \
+    | "$python" -c 'import json, sys; json.dump(json.load(sys.stdin)["planned_values"]["outputs"]["bundle_vars"]["value"], sys.stdout, indent=2, sort_keys=True)' \
+    > "$out/kubernetes-offline.vars.json"
+  echo >> "$out/kubernetes-offline.vars.json"
+  echo "   Role variables for the bundle (kubernetes-offline.vars.json):"
+  sed 's/^/     /' "$out/kubernetes-offline.vars.json"
+
   mounts=(-v "$role_tree:/roles:ro" -v "$out:/kit")
-  extra=()
+  extra=("-e" "@/kit/kubernetes-offline.vars.json")
   for i in "${!var_files[@]}"; do
     mounts+=(-v "${var_files[$i]}:/vars/$i.yml:ro")
     extra+=("-e" "@/vars/$i.yml")
@@ -300,8 +343,9 @@ if [[ "$bundle" == 1 ]]; then
      offline        = true
      offline_bundle = \"\$KIT/kubernetes-offline.tar\"
      run_ansible    = true
-   and turn on the same add-ons (ansible_extra_vars, velero) as in the -e
-   files of the build: add-ons that were not built in are missing offline."
+   The bundle holds the add-ons in kubernetes-offline.vars.json (from
+   -f terraform.tfvars and -e). Turn on no other add-ons offline: they are
+   not in the bundle."
 else
   bundle_text="not included (-K). Build them with
    scripts/prepare-offline.sh, or stage them with stage_offline_bundle = true

@@ -50,13 +50,16 @@ fi
 virsh pool-start default 2>/dev/null || true
 virsh pool-autostart default
 
-step "Network e2e"
+# E2E_NETWORK=isolated gives the VMs no route out (the offline scenario).
+step "Network e2e (${E2E_NETWORK:-nat})"
+forward="  <forward mode='nat'/>"
+[[ "${E2E_NETWORK:-nat}" == isolated ]] && forward=""
 if ! virsh net-info e2e >/dev/null 2>&1; then
   net_xml="$(mktemp)"
   cat > "$net_xml" <<XML
 <network>
   <name>e2e</name>
-  <forward mode='nat'/>
+${forward}
   <bridge name='virbr-e2e' stp='on' delay='0'/>
   <dns enable='yes'/>
   <ip address='192.168.123.1' netmask='255.255.255.0'/>

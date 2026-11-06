@@ -34,6 +34,13 @@ the VMs. To keep a cluster there, stay on the version you have, or rebuild it
 deliberately: back up what you need (`etcd_backup_command`, your workloads),
 apply, and run the playbook on the new VMs.
 
+## 0.9.x → 0.10.0
+
+- No change to resources, the rendered cloud-init or the inventory.
+- Offline: build the kit again with `scripts/prepare-offline.sh -f
+  terraform.tfvars`, so the bundle has Argo CD (default since 0.9.0) and the
+  other add-ons you enabled.
+
 ## 0.8.x → 0.9.0
 
 No VM is replaced. With `run_ansible = true` the next `apply` runs the

@@ -82,7 +82,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [cloud-init, ansible]
+        module: [cloud-init, ansible, role-vars]
         tool: [terraform, tofu]
     steps:
       - uses: actions/checkout@v7
@@ -102,6 +102,19 @@ jobs:
       - name: test
         working-directory: modules/${{ matrix.module }}
         run: ${{ matrix.tool }} test
+
+  workstation:
+    name: Workstation scripts (fake vmrun and ovftool)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Template from the OVA, clone, .vmx edits, destroy
+        run: tests/workstation/run.sh
 
   lint:
     name: Lint (pre-commit, tflint) and security scan
@@ -137,7 +150,7 @@ jobs:
 
   release:
     name: Tag and create release
-    needs: [validate, ansible, test, lint]
+    needs: [validate, ansible, test, workstation, lint]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

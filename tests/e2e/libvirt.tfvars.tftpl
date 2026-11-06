@@ -11,7 +11,7 @@ ubuntu_image_sha256 = "${E2E_IMAGE_SHA256}"
 # worker, without Longhorn, the registry and Headlamp.
 vms = {
   "kube-cp01" = { ip = "192.168.123.11", role = "control_plane", cpu = 2, memory_mb = 6144, disk_gb = 20 }
-  "kube-wl01" = { ip = "192.168.123.21", role = "worker", cpu = 2, memory_mb = 4096, disk_gb = 20 }
+  "kube-wl01" = { ip = "192.168.123.21", role = "worker", cpu = 2, memory_mb = ${E2E_WORKER_MEMORY}, disk_gb = 20 }
 }
 ip_prefix_length = 24
 gateway          = "192.168.123.1"
@@ -30,4 +30,5 @@ ansible_extra_vars = {
   kubernetes_longhorn_enabled = false
   kubernetes_registry_enabled = false
   kubernetes_headlamp_enabled = false
+${E2E_EXTRA_VARS}
 }

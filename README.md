@@ -367,13 +367,14 @@ ansible-role-kubernetes (v3.2.0+) can install Traefik as ingress controller,
 cert-manager and Argo CD, and (v3.3.0+) Velero for backups of workloads and
 volume data to S3/MinIO (see its
 [add-on guide](https://github.com/636B65/ansible-role-kubernetes/blob/main/docs/addons.md)).
-All of them are off by default. Turn them on through `ansible_extra_vars`:
+Argo CD is installed by default (since 0.9.0); the others are off. Change
+them through `ansible_extra_vars`:
 
 ```hcl
 ansible_extra_vars = {
-  kubernetes_ingress_enabled      = true # Traefik, NodePort 30080/30444
-  kubernetes_cert_manager_enabled = true # with a "selfsigned" ClusterIssuer
-  kubernetes_argocd_enabled       = true
+  kubernetes_ingress_enabled      = true  # Traefik, NodePort 30080/30444
+  kubernetes_cert_manager_enabled = true  # with a "selfsigned" ClusterIssuer
+  kubernetes_argocd_enabled       = false # without Argo CD
 }
 ```
 
@@ -396,7 +397,8 @@ velero = {
 Keep the keys out of version control: the inventory holding them is written
 with mode `0600`.
 
-They are part of the offline bundle when they are enabled while staging.
+The offline kit puts the add-ons of your settings into the bundle: build it
+with `scripts/prepare-offline.sh -f terraform.tfvars` (see "Offline").
 
 ### Add and remove nodes
 
@@ -481,19 +483,18 @@ The kit holds:
   and manifests, built by the role's `offline_build` tasks (role v3.4.0+) in
   an Ubuntu 26.04 container. No cluster is deployed.
 
-Add-ons are off by default and only in the bundle when they are turned on for
-the build. Pass the same switches as the offline cluster will use in a YAML
-file with `-e`:
-
-```yaml
-# bundle-vars.yml
-kubernetes_ingress_enabled: true
-kubernetes_velero_enabled: true # with velero = { enabled = true, ... } offline
-```
+The bundle holds exactly the add-ons the offline cluster installs. Pass the
+cluster's `terraform.tfvars` with `-f`, and the kit reads its
+`ansible_extra_vars` and `velero` through the same module that writes the
+inventory (`modules/role-vars`). Without `-f` the bundle has the defaults
+(Argo CD on, the other add-ons off). The result is in
+`kubernetes-offline.vars.json` in the kit:
 
 ```bash
-scripts/prepare-offline.sh -o offline-kit -p workstation -e bundle-vars.yml -t
+scripts/prepare-offline.sh -o offline-kit -p workstation -f workstation/terraform.tfvars -t
 ```
+
+`-e file.yml` adds more role variables for the build.
 
 The kit's `README.txt` lists the settings to use offline. Run the script with
 `-h` for all options; `-K` skips the Kubernetes bundle.
@@ -630,18 +631,31 @@ CI (`.github/workflows/release.yml`) runs on every push and pull request:
 - `fmt`, `init` and `validate` for every platform, with both Terraform and
   OpenTofu,
 - `terraform test` / `tofu test` for `modules/cloud-init` (rendered cloud-init,
-  networking, offline) and `modules/ansible` (inventory, guards; mocked provider),
+  networking, offline), `modules/ansible` (inventory, guards; mocked provider)
+  and `modules/role-vars` (defaults, Velero, bundle variables),
+- the Workstation platform end to end with fake `vmrun`, `vmware-vdiskmanager`
+  and `ovftool` (`tests/workstation/run.sh`: template from the OVA, clones,
+  `.vmx` edits, destroy),
 - pre-commit with tflint, shellcheck, YAML checks and
   `scripts/sync-common.sh --check`, plus a Trivy misconfiguration scan,
 - a syntax check of every playbook in `ansible/` against the pinned role.
 
-A nightly end-to-end test (`.github/workflows/e2e-libvirt.yml`) turns a
-GitHub runner into a KVM host and deploys a real cluster with the libvirt
-platform: one controller and one worker on an isolated libvirt network,
-installed with `run_ansible` (without Longhorn, the registry and Headlamp to
-fit the runner), and checks that both nodes are Ready. It also runs by hand
-and on branches that change the test. `tests/e2e/libvirt-host.sh` prepares
-any Ubuntu machine with KVM the same way, to run the test in a lab.
+End-to-end tests (`.github/workflows/e2e-libvirt.yml`) turn a GitHub runner
+into a KVM host and deploy real clusters with the libvirt platform: one
+controller and one worker, installed with `run_ansible` (without Longhorn, the
+registry and Headlamp to fit the runner). Scenarios
+(`tests/e2e/scenario.sh`):
+
+| Scenario | When | Checks |
+|----------|------|--------|
+| `basic` | nightly | both nodes Ready, Cilium and Argo CD running |
+| `addons` | weekly | also Traefik, cert-manager (ClusterIssuer ready) and Velero, with a backup written to MinIO on the runner |
+| `offline` | weekly | the VMs have no route out; the kit is built with `scripts/prepare-offline.sh -f terraform.tfvars` and the cluster is installed from its bundle |
+| `upgrade` | weekly | the previous release is deployed, this commit is applied on top, no VM may be replaced, and the cluster must be healthy afterwards |
+
+All run by hand too (`workflow_dispatch`, one scenario or `all`).
+`tests/e2e/libvirt-host.sh` prepares any Ubuntu machine with KVM the same way,
+to run them in a lab.
 
 Run the same checks locally:
 
@@ -650,6 +664,8 @@ pip install pre-commit && pre-commit install   # needs terraform and tflint
 pre-commit run --all-files
 (cd modules/cloud-init && terraform init && terraform test)
 (cd modules/ansible && terraform init && terraform test)
+(cd modules/role-vars && terraform init && terraform test)
+tests/workstation/run.sh
 ```
 
 Provider versions are pinned by the committed `.terraform.lock.hcl` in every

@@ -29,5 +29,5 @@ repos:
         name: Shared platform files are generated from shared/
         entry: scripts/sync-common.sh --check
         language: script
-        files: ^(shared/|scripts/sync-common\.sh$|[a-z]+/(variables|common|ansible)\.tf$)
+        files: ^(shared/|scripts/sync-common\.sh$|[a-z]+/((variables|common|ansible)\.tf|terraform\.tfvars\.example)$)
         pass_filenames: false
