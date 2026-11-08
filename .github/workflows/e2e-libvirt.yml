@@ -110,6 +110,21 @@ jobs:
         with:
           terraform_wrapper: false
 
+      # The libvirt provider is downloaded from its GitHub release, which can be
+      # unavailable for hours (504 Gateway Timeout); keep it between runs.
+      - name: Use a provider cache
+        run: |
+          mkdir -p ~/.terraform.d/plugin-cache
+          echo "TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache" >> "$GITHUB_ENV"
+
+      - name: Restore the provider cache
+        id: providers
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: terraform-providers-${{ hashFiles('*/.terraform.lock.hcl') }}
+          restore-keys: terraform-providers-
+
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -140,7 +155,7 @@ jobs:
           bash "$scripts/scenario.sh" tfvars "$SCENARIO"
           bash "$scripts/scenario.sh" prepare "$SCENARIO"
 
-      - name: terraform apply (VMs + Kubernetes)
+      - name: terraform init
         working-directory: libvirt
         run: |
           # The registry and github.com (provider checksums) sometimes answer 5xx.
@@ -149,7 +164,18 @@ jobs:
             [[ $try -lt 4 ]] || exit 1
             sleep $((try * 20))
           done
-          terraform apply -auto-approve -input=false
+
+      # Saved right after init, so a later failure of the run does not lose it.
+      - name: Save the provider cache
+        if: steps.providers.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: ${{ steps.providers.outputs.cache-primary-key }}
+
+      - name: terraform apply (VMs + Kubernetes)
+        working-directory: libvirt
+        run: terraform apply -auto-approve -input=false
 
       - name: Upgrade to this commit
         if: matrix.scenario == 'upgrade'
