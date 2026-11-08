@@ -143,7 +143,12 @@ jobs:
       - name: terraform apply (VMs + Kubernetes)
         working-directory: libvirt
         run: |
-          terraform init -input=false
+          # The registry and github.com (provider checksums) sometimes answer 5xx.
+          for try in 1 2 3 4; do
+            terraform init -input=false && break
+            [[ $try -lt 4 ]] || exit 1
+            sleep $((try * 20))
+          done
           terraform apply -auto-approve -input=false
 
       - name: Upgrade to this commit
@@ -154,7 +159,11 @@ jobs:
         run: |
           KUBECONFIG="$(terraform output -raw kubeconfig)" bash "$RUNNER_TEMP/e2e/scenario.sh" check nodes
           git checkout -q "$HEAD_SHA"
-          terraform init -input=false -upgrade
+          for try in 1 2 3 4; do
+            terraform init -input=false -upgrade && break
+            [[ $try -lt 4 ]] || exit 1
+            sleep $((try * 20))
+          done
           terraform plan -input=false -out=upgrade.plan
           bash ../tests/e2e/scenario.sh no-replaced-vms
           terraform apply -input=false upgrade.plan
