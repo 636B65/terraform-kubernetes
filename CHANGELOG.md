@@ -7,9 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
-- End-to-end tests: `terraform init` is retried up to four times. The nightly
-  `basic` run failed when github.com answered 504 for the libvirt provider's
-  checksums.
+- End-to-end tests: the nightly `basic` run failed when github.com answered
+  504 for the libvirt provider's checksums, for more than an hour. The
+  providers are now kept in a cache between runs, and `terraform init` is
+  retried up to four times.
 
 ## [0.10.0] - 2026-11-06
 
