@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- ansible-role-kubernetes v3.4.1 -> v3.5.0 ([release notes](https://github.com/636B65/ansible-role-kubernetes/releases/tag/v3.5.0)).
+
 ### Fixed
 - End-to-end tests: the nightly `basic` run failed when github.com answered
   504 for the libvirt provider's checksums, for more than an hour. The
