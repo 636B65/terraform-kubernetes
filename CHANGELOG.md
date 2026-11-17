@@ -6,10 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Signed releases: every new release gets a source archive, `SHA256SUMS`,
+  Sigstore signatures (`*.sigstore.json`) and SLSA build provenance
+  (`*.intoto.jsonl`), made by the new `sign-release.yml` workflow. How to
+  verify them is in the new `SECURITY.md`, which also says how to report a
+  vulnerability.
+- OpenSSF Scorecard workflow and README badge.
+
 ### Changed
 - ansible-role-kubernetes v3.4.1 -> v3.5.0 ([release notes](https://github.com/636B65/ansible-role-kubernetes/releases/tag/v3.5.0)).
 
 ### Fixed
+- The pull requests of the role tracking workflow got no checks, because
+  GitHub starts no workflows for pull requests made with `GITHUB_TOKEN`. The
+  workflow now starts the Release and end-to-end workflows on its branch.
 - End-to-end tests: the nightly `basic` run failed when github.com answered
   504 for the libvirt provider's checksums, for more than an hour. The
   providers are now kept in a cache between runs, and `terraform init` is

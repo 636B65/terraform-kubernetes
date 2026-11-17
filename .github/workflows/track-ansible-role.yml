@@ -14,6 +14,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  actions: write # start the checks on the new branch (see below)
 
 env:
   ROLE_REPO: 636B65/ansible-role-kubernetes
@@ -89,3 +90,9 @@ jobs:
             printf '\nBranch with the update: `%s`\n' "$branch" >> body.md
             gh issue create --title "$title" --body-file body.md
           fi
+
+          # Pushes and pull requests made with GITHUB_TOKEN start no workflow
+          # runs, so the pull request would have no checks. Starting a
+          # workflow by hand is allowed; its checks show on the pull request.
+          gh workflow run release.yml --ref "$branch"
+          gh workflow run e2e-libvirt.yml --ref "$branch" -f scenario=all

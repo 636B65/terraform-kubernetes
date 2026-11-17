@@ -1,6 +1,7 @@
 # Ubuntu 26.04 VMs with Terraform
 
 [![Release](https://github.com/636B65/terraform-kubernetes/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/636B65/terraform-kubernetes/actions/workflows/release.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/636B65/terraform-kubernetes/badge)](https://scorecard.dev/viewer/?uri=github.com/636B65/terraform-kubernetes)
 [![Track ansible-role-kubernetes](https://github.com/636B65/terraform-kubernetes/actions/workflows/track-ansible-role.yml/badge.svg)](https://github.com/636B65/terraform-kubernetes/actions/workflows/track-ansible-role.yml)
 [![Latest release](https://img.shields.io/github/v/release/636B65/terraform-kubernetes?sort=semver)](https://github.com/636B65/terraform-kubernetes/releases/latest)
 [![ansible-role-kubernetes](https://img.shields.io/github/v/release/636B65/ansible-role-kubernetes?sort=semver&label=ansible-role-kubernetes)](https://github.com/636B65/ansible-role-kubernetes/releases/latest)
