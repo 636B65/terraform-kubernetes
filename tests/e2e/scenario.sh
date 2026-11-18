@@ -74,7 +74,7 @@ prepare() {
     addons)
       # An S3 server for Velero on the network's gateway. moto keeps the
       # objects in memory and accepts any keys.
-      pip install --quiet "moto[server]"
+      pip install --quiet --require-hashes -r "$repo_root/.github/requirements/moto.txt"
       nohup moto_server -H 192.168.123.1 -p 9000 > "$HOME/e2e-s3.log" 2>&1 &
       for _ in $(seq 1 30); do
         curl -fsS "$s3_url/" >/dev/null 2>&1 && break
