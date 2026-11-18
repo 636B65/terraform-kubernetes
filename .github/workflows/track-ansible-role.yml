@@ -11,10 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-  actions: write # start the checks on the new branch (see below)
+  contents: read
 
 env:
   ROLE_REPO: 636B65/ansible-role-kubernetes
@@ -22,8 +19,13 @@ env:
 jobs:
   track:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the update branch
+      pull-requests: write # open the pull request
+      issues: write # or an issue, if pull requests are not allowed
+      actions: write # start the checks on the new branch (see below)
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Compare pinned and latest role version
         id: check

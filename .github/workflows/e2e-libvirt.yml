@@ -73,7 +73,7 @@ jobs:
         scenario: ${{ fromJSON(needs.scenarios.outputs.list) }}
     name: e2e (${{ matrix.scenario }})
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -91,7 +91,7 @@ jobs:
           echo "sha256=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Cache the Ubuntu image
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/e2e-image
           key: ubuntu-image-${{ steps.image.outputs.sha256 }}
@@ -106,7 +106,7 @@ jobs:
             echo "$SHA256  $HOME/e2e-image/$IMAGE_NAME" | sha256sum -c
           fi
 
-      - uses: hashicorp/setup-terraform@v4
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_wrapper: false
 
@@ -119,18 +119,18 @@ jobs:
 
       - name: Restore the provider cache
         id: providers
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.terraform.d/plugin-cache
           key: terraform-providers-${{ hashFiles('*/.terraform.lock.hcl') }}
           restore-keys: terraform-providers-
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
       - name: Install Ansible
-        run: pip install ansible-core
+        run: pip install --require-hashes -r .github/requirements/ansible.txt
 
       - name: Check out the previous release
         if: matrix.scenario == 'upgrade'
@@ -168,7 +168,7 @@ jobs:
       # Saved right after init, so a later failure of the run does not lose it.
       - name: Save the provider cache
         if: steps.providers.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.terraform.d/plugin-cache
           key: ${{ steps.providers.outputs.cache-primary-key }}
