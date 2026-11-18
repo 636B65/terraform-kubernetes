@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- ansible-role-kubernetes v3.5.0 -> v3.6.0 ([release notes](https://github.com/636B65/ansible-role-kubernetes/releases/tag/v3.6.0)).
+
 ### Added
 - Signed releases: every new release gets a source archive, `SHA256SUMS`,
   Sigstore signatures (`*.sigstore.json`) and SLSA build provenance
