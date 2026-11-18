@@ -6,19 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-- ansible-role-kubernetes v3.5.0 -> v3.6.0 ([release notes](https://github.com/636B65/ansible-role-kubernetes/releases/tag/v3.6.0)).
+## [0.11.0] - 2026-11-18
 
 ### Added
 - Signed releases: every new release gets a source archive, `SHA256SUMS`,
   Sigstore signatures (`*.sigstore.json`) and SLSA build provenance
   (`*.intoto.jsonl`), made by the new `sign-release.yml` workflow. How to
   verify them is in the new `SECURITY.md`, which also says how to report a
-  vulnerability.
+  vulnerability. Releases 0.6.1 to 0.10.0 were signed afterwards.
 - OpenSSF Scorecard workflow and README badge.
 
 ### Changed
-- ansible-role-kubernetes v3.4.1 -> v3.5.0 ([release notes](https://github.com/636B65/ansible-role-kubernetes/releases/tag/v3.5.0)).
+- Default `ansible_role_version` v3.4.1 -> v3.6.0
+  ([3.5.0](https://github.com/636B65/ansible-role-kubernetes/releases/tag/v3.5.0),
+  [3.6.0](https://github.com/636B65/ansible-role-kubernetes/releases/tag/v3.6.0)):
+  downloads are retried, newer Cilium, Cilium CLI, metrics-server, Velero,
+  Argo CD, Traefik and kube-prometheus-stack (93.x, with its CRDs upgraded by
+  the chart's upgrade job).
+- Providers: bpg/proxmox 0.120.0 -> 0.122.0, vmware/vsphere 2.17.2 -> 2.18.0.
 
 ### Fixed
 - The pull requests of the role tracking workflow got no checks, because
