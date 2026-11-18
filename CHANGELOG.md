@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- CI hardening for OpenSSF Scorecard: every GitHub Action is pinned to a
+  commit SHA (the SLSA generator stays on its tag, as it requires), `pip`
+  installs ansible-core and pre-commit from hash-pinned requirements in
+  `.github/requirements/` (kept up to date by Dependabot), and the workflows
+  that write (`track-ansible-role.yml`, `providers-lock.yml`) grant write
+  permissions per job instead of to the whole workflow.
+
 ## [0.11.0] - 2026-11-18
 
 ### Added

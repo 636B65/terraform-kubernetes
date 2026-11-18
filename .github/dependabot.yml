@@ -24,3 +24,10 @@ updates:
       terraform-providers:
         patterns:
           - "*"
+
+  - package-ecosystem: pip
+    directory: /.github/requirements
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
