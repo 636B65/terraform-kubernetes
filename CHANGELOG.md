@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   that write (`track-ansible-role.yml`, `providers-lock.yml`) grant write
   permissions per job instead of to the whole workflow.
 
+### Added
+- `LICENSE`: MIT.
+
 ## [0.11.0] - 2026-11-18
 
 ### Added
