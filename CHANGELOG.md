@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `.github/requirements/` (kept up to date by Dependabot), and the workflows
   that write (`track-ansible-role.yml`, `providers-lock.yml`) grant write
   permissions per job instead of to the whole workflow.
+- Provider bpg/proxmox 0.122.0 -> 0.123.0.
 
 ### Added
 - `LICENSE`: MIT.
