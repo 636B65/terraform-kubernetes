@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.12.0] - 2026-11-21
+
+### Added
+- `docs/troubleshooting-libvirt-ubuntu.md`: troubleshooting guide for the
+  libvirt platform on Ubuntu hosts (daemon/socket setup, libvirt group,
+  storage pool, file permissions/ACL, AppArmor and stale state after failed
+  applies), from a full deploy- diagnose- fix cycle on Ubuntu 26.04.
+
 ## [Unreleased]
 
 ### Changed
