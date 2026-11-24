@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [0.12.1] - 2026-11-24
+
+### Changed
+- Default `ansible_role_version` is `v3.7.0`: Argo CD chart 10.18.2 and
+  kube-prometheus-stack 93.9.0 (the Velero AWS plugin stays on v1.14.x, which
+  matches the Velero 1.18 the pinned chart deploys).
+
+### Fixed
+- CHANGELOG: the CI hardening and the proxmox provider update were listed as
+  unreleased, but shipped in 0.12.0.
+
 ## [0.12.0] - 2026-11-21
 
 ### Added
@@ -11,8 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   libvirt platform on Ubuntu hosts (daemon/socket setup, libvirt group,
   storage pool, file permissions/ACL, AppArmor and stale state after failed
   applies), from a full deploy- diagnose- fix cycle on Ubuntu 26.04.
-
-## [Unreleased]
+- `LICENSE`: MIT.
 
 ### Changed
 - CI hardening for OpenSSF Scorecard: every GitHub Action is pinned to a
@@ -22,9 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   that write (`track-ansible-role.yml`, `providers-lock.yml`) grant write
   permissions per job instead of to the whole workflow.
 - Provider bpg/proxmox 0.122.0 -> 0.123.0.
-
-### Added
-- `LICENSE`: MIT.
 
 ## [0.11.0] - 2026-11-18
 
