@@ -9,9 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [0.12.1] - 2026-11-24
 
 ### Changed
-- Default `ansible_role_version` is `v3.7.0`: Argo CD chart 10.18.2 and
+- Default `ansible_role_version` is `v3.8.0`: Argo CD chart 10.18.2,
   kube-prometheus-stack 93.9.0 (the Velero AWS plugin stays on v1.14.x, which
-  matches the Velero 1.18 the pinned chart deploys).
+  matches the Velero 1.18 the pinned chart deploys), and
+  `kubernetes_addons_extra_values` for more Helm values per add-on, such as a
+  registry mirror.
+- The offline kit passes `kubernetes_addons_extra_values` to the bundle build,
+  so the bundle stages the images those values name.
+- The end-to-end tests pull Argo CD's Redis from `mirror.gcr.io`:
+  `ecr-public.aws.com` rate-limits anonymous pulls from shared CI runners
+  (`429 Data limit exceeded`), which failed the nightly test.
 
 ### Fixed
 - CHANGELOG: the CI hardening and the proxmox provider update were listed as

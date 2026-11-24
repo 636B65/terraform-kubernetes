@@ -19,6 +19,9 @@ run "extra_vars_override" {
       kubernetes_ingress_enabled = true
       kubernetes_version         = "1.36.5"
       kubernetes_api_vip         = "10.0.0.10"
+      kubernetes_addons_extra_values = {
+        argocd = { redis = { image = { repository = "mirror.gcr.io/library/redis" } } }
+      }
     }
   }
 
@@ -27,6 +30,9 @@ run "extra_vars_override" {
       kubernetes_argocd_enabled  = false
       kubernetes_ingress_enabled = true
       kubernetes_version         = "1.36.5"
+      kubernetes_addons_extra_values = {
+        argocd = { redis = { image = { repository = "mirror.gcr.io/library/redis" } } }
+      }
     }
     error_message = "extra_vars override the defaults, and only bundle-relevant variables are kept."
   }

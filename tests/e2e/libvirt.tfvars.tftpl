@@ -30,5 +30,10 @@ ansible_extra_vars = {
   kubernetes_longhorn_enabled = false
   kubernetes_registry_enabled = false
   kubernetes_headlamp_enabled = false
+  # Argo CD's Redis from Google's Docker Hub mirror: ecr-public.aws.com
+  # rate-limits anonymous pulls from shared CI runners (429 Data limit exceeded).
+  kubernetes_addons_extra_values = {
+    argocd = { redis = { image = { repository = "mirror.gcr.io/library/redis" } } }
+  }
 ${E2E_EXTRA_VARS}
 }

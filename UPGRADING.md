@@ -37,7 +37,7 @@ apply, and run the playbook on the new VMs.
 ## 0.12.0 → 0.12.1
 
 - No change to resources, the rendered cloud-init or the inventory.
-- With `run_ansible = true`, the new default `ansible_role_version` (v3.7.0)
+- With `run_ansible = true`, the new default `ansible_role_version` (v3.8.0)
   runs the playbook again on `apply` and updates Argo CD and, if enabled,
   kube-prometheus-stack to their new pinned charts.
 - Offline: build the kit again, so the bundle has the new versions.
